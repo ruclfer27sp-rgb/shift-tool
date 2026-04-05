@@ -7,6 +7,22 @@
 <meta name="theme-color" content="#1a365d">
 <title>シフト計算ツール</title>
 <style>
+/* パスワード画面 */
+#pw-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#1a365d,#2b6cb0);
+  display:flex;align-items:center;justify-content:center;z-index:9999}
+#pw-box{background:white;border-radius:16px;padding:40px 32px;width:min(340px,90vw);
+  text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+#pw-box h2{color:#1a365d;font-size:20px;font-weight:800;margin-bottom:8px}
+#pw-box p{color:#718096;font-size:13px;margin-bottom:24px}
+#pw-input{width:100%;border:2px solid #e2e8f0;border-radius:10px;padding:12px 16px;
+  font-size:16px;outline:none;transition:border .2s;text-align:center;letter-spacing:2px}
+#pw-input:focus{border-color:#3182ce}
+#pw-btn{width:100%;margin-top:12px;background:linear-gradient(135deg,#1a365d,#2b6cb0);
+  color:white;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:700;
+  cursor:pointer;transition:opacity .2s}
+#pw-btn:hover{opacity:.9}
+#pw-error{color:#e53e3e;font-size:13px;margin-top:10px;min-height:18px}
+</style>
 :root {
   --blue-dark:#1a365d; --blue-mid:#2b6cb0; --blue-light:#3182ce;
   --blue-pale:#ebf8ff; --text-dark:#1a202c; --text-mid:#2d3748;
@@ -214,6 +230,37 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 </style>
 </head>
 <body>
+<!-- パスワード画面 -->
+<div id="pw-overlay">
+  <div id="pw-box">
+    <h2>シフト計算ツール</h2>
+    <p>パスワードを入力してください</p>
+    <input id="pw-input" type="password" placeholder="パスワード" autocomplete="off">
+    <button id="pw-btn" onclick="checkPw()">ログイン</button>
+    <div id="pw-error"></div>
+  </div>
+</div>
+<script>
+(function(){
+  if(sessionStorage.getItem('sc_auth')==='ok'){
+    document.getElementById('pw-overlay').style.display='none';
+  }
+  document.getElementById('pw-input').addEventListener('keydown',function(e){
+    if(e.key==='Enter') checkPw();
+  });
+})();
+function checkPw(){
+  var v=document.getElementById('pw-input').value;
+  if(v==='enexshift2025'){
+    sessionStorage.setItem('sc_auth','ok');
+    document.getElementById('pw-overlay').style.display='none';
+  } else {
+    document.getElementById('pw-error').textContent='パスワードが違います';
+    document.getElementById('pw-input').value='';
+    document.getElementById('pw-input').focus();
+  }
+}
+</script>
 
 <header class="app-header">
   <div class="app-title">🚛 シフト計算ツール</div>
