@@ -384,56 +384,103 @@ function checkPw(){
 <div class="tab-panel" id="tab-manage">
   <div class="card">
     <div class="card-title">👥 ドライバー名簿（最大80名）</div>
-    <div class="add-row">
-      <input type="text" id="newDriverName" placeholder="ドライバー名を入力" maxlength="30">
-      <button class="btn btn-primary" id="addDriverBtn">＋ 追加</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text-muted)">現在: <span id="driverCount">0</span>名</div>
+      <button class="btn btn-primary btn-sm" id="addDriverBtn">＋ 追加</button>
     </div>
-    <div id="driverChips" class="driver-chips"></div>
-    <div style="font-size:11px;color:var(--text-muted)">
-      現在: <span id="driverCount">0</span>名
+    <div id="driverChips" class="driver-chips" style="display:none"></div>
+    <div class="table-wrap">
+      <table class="tbl" id="driverTable">
+        <thead><tr>
+          <th>氏名</th><th>表示名</th><th>候補1</th><th>候補2</th><th>候補3</th><th></th>
+        </tr></thead>
+        <tbody id="driverTableBody"></tbody>
+      </table>
     </div>
   </div>
   <div class="card">
     <div class="card-title">📦 配送先マスター</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
-      組み込みの配送先はHTMLのMASTERオブジェクトを編集してください。<br>
+      組み込みの配送先はHTMLのMASTERオブジェクトを編集してください。出勤時間のみ鉛筆アイコンで上書き保存できます。<br>
       ここから追加した配送先はlocalStorageに保存されます。
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div style="grid-column:1/-1">
-        <label>配送先名</label>
-        <input type="text" id="newDestName" placeholder="例: XX倉庫" maxlength="40">
-      </div>
-      <div>
-        <label>平日 km</label>
-        <input type="text" id="newDestKm" placeholder="例: 120" inputmode="decimal">
-      </div>
-      <div>
-        <label>平日 残業h</label>
-        <input type="text" id="newDestOtWd" placeholder="例: 1.5" inputmode="decimal">
-      </div>
-      <div>
-        <label>日祝 残業h</label>
-        <input type="text" id="newDestOtHol" placeholder="例: 4.0" inputmode="decimal">
-      </div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="btn btn-primary" style="width:100%" id="addDestBtn">＋ 配送先を追加</button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table class="tbl">
+
+    <!-- 配送先一覧テーブル -->
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table class="tbl" id="destAllTable">
         <thead><tr>
-          <th>配送先名</th><th class="r">平日 km</th>
-          <th class="r">平日 残業h</th><th class="r">日祝 残業h</th><th></th>
+          <th>届先</th><th>出勤時間</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th></th>
         </tr></thead>
-        <tbody id="destMasterBody"></tbody>
+        <tbody id="destAllBody"></tbody>
       </table>
+    </div>
+
+    <!-- 新規配送先追加フォーム -->
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-mid);margin-bottom:8px">新規配送先を追加</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="grid-column:1/-1">
+          <label>配送先名</label>
+          <input type="text" id="newDestName" placeholder="例: XX倉庫" maxlength="40">
+        </div>
+        <div>
+          <label>出勤時間 (HH:MM)</label>
+          <input type="text" id="newDestStart" placeholder="例: 05:30" maxlength="5">
+        </div>
+        <div>
+          <label>平日 km</label>
+          <input type="text" id="newDestKm" placeholder="例: 120" inputmode="decimal">
+        </div>
+        <div>
+          <label>平日 残業h</label>
+          <input type="text" id="newDestOtWd" placeholder="例: 1.5" inputmode="decimal">
+        </div>
+        <div>
+          <label>日祝 残業h</label>
+          <input type="text" id="newDestOtHol" placeholder="例: 4.0" inputmode="decimal">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn btn-primary" style="width:100%" id="addDestBtn">＋ 配送先を追加</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="card">
     <div class="card-title">💾 データ管理</div>
     <div class="warn-box">⚠️ 月次締め後はCSVエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
     <button class="btn btn-danger" id="clearAllBtn">🗑️ 全データ削除</button>
+  </div>
+</div>
+
+<!-- ドライバー編集モーダル -->
+<div id="driverModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:12px;padding:24px;width:min(420px,92vw);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:800;color:var(--blue-dark);margin-bottom:16px" id="driverModalTitle">ドライバー追加</div>
+    <input type="hidden" id="driverModalOrig">
+    <div style="margin-bottom:10px">
+      <label>氏名 <span style="color:#e53e3e">*</span></label>
+      <input type="text" id="driverModalName" placeholder="氏名を入力" maxlength="30">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>表示名（空欄の場合は氏名と同じ）</label>
+      <input type="text" id="driverModalDisplay" placeholder="表示名を入力" maxlength="30">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>サーチ候補1（OCR照合用）</label>
+      <input type="text" id="driverModalAlias1" placeholder="読み・別名など" maxlength="30">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>サーチ候補2</label>
+      <input type="text" id="driverModalAlias2" placeholder="" maxlength="30">
+    </div>
+    <div style="margin-bottom:16px">
+      <label>サーチ候補3</label>
+      <input type="text" id="driverModalAlias3" placeholder="" maxlength="30">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-gray" onclick="closeDriverModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveDriverModal()">保存</button>
+    </div>
   </div>
 </div>
 
@@ -543,8 +590,10 @@ const MASTER = {
 // ================================================================
 let state = {
   drivers: [...MASTER.drivers],
+  driverDetails: {}, // {[name]: {displayName:'', alias1:'', alias2:'', alias3:''}}
   entries: [],
   customDests: [],
+  destCustom: {}, // {[destName]: {startTime:''}} MASTER配送先の出勤時間上書き
   currentDriver: '',
   currentDate: '',
   currentDayType: 'weekday'
@@ -572,6 +621,10 @@ function isCustomDest(dest) {
   return !MASTER.destinations.includes(dest) &&
     state.customDests.some(c => c.name === dest);
 }
+function getStartTime(dest) {
+  if (dest in state.destCustom) return state.destCustom[dest].startTime || '';
+  return state.customDests.find(c => c.name === dest)?.startTime || '';
+}
 let ocrResults = [];
 let ocrConfig  = { driver: '', date: '', dayType: 'weekday' };
 let destFilter = '';
@@ -580,18 +633,24 @@ let destFilter = '';
 // Persistence
 // ================================================================
 function saveState() {
-  localStorage.setItem('sc_entries',     JSON.stringify(state.entries));
-  localStorage.setItem('sc_drivers',     JSON.stringify(state.drivers));
-  localStorage.setItem('sc_customDests', JSON.stringify(state.customDests));
+  localStorage.setItem('sc_entries',       JSON.stringify(state.entries));
+  localStorage.setItem('sc_drivers',       JSON.stringify(state.drivers));
+  localStorage.setItem('sc_customDests',   JSON.stringify(state.customDests));
+  localStorage.setItem('sc_driverDetails', JSON.stringify(state.driverDetails));
+  localStorage.setItem('sc_destCustom',    JSON.stringify(state.destCustom));
 }
 function loadState() {
   try {
-    const e  = localStorage.getItem('sc_entries');
-    const d  = localStorage.getItem('sc_drivers');
-    const cd = localStorage.getItem('sc_customDests');
-    if (e)  state.entries     = JSON.parse(e);
-    if (d)  state.drivers     = JSON.parse(d);
-    if (cd) state.customDests = JSON.parse(cd);
+    const e   = localStorage.getItem('sc_entries');
+    const d   = localStorage.getItem('sc_drivers');
+    const cd  = localStorage.getItem('sc_customDests');
+    const dd  = localStorage.getItem('sc_driverDetails');
+    const dc  = localStorage.getItem('sc_destCustom');
+    if (e)   state.entries       = JSON.parse(e);
+    if (d)   state.drivers       = JSON.parse(d);
+    if (cd)  state.customDests   = JSON.parse(cd);
+    if (dd)  state.driverDetails = JSON.parse(dd);
+    if (dc)  state.destCustom    = JSON.parse(dc);
   } catch(ex) { console.warn('loadState error', ex); }
 }
 function saveApiKey() {
@@ -650,7 +709,9 @@ function renderDriverSelect() {
   sel.innerHTML = '<option value="">-- ドライバーを選択 --</option>';
   state.drivers.forEach(d => {
     const o = document.createElement('option');
-    o.value = o.textContent = d;
+    o.value = d;
+    const detail = state.driverDetails[d];
+    o.textContent = (detail && detail.displayName) ? detail.displayName : d;
     if (d === cur) o.selected = true;
     sel.appendChild(o);
   });
@@ -1195,36 +1256,61 @@ function doImportOCR(dest, count, driver, date, dayType, silent) {
 // Manage tab
 // ================================================================
 function renderManageTab() {
-  // Driver chips
-  const chips = document.getElementById('driverChips');
-  chips.innerHTML = '';
-  state.drivers.forEach(d => {
-    const chip = document.createElement('div');
-    chip.className = 'chip';
-    chip.textContent = d;
-    const del = document.createElement('button');
-    del.className = 'chip-del';
-    del.textContent = '×';
-    del.title = '削除';
-    del.addEventListener('click', () => removeDriver(d));
-    chip.appendChild(del);
-    chips.appendChild(chip);
-  });
+  // Driver table
   document.getElementById('driverCount').textContent = state.drivers.length;
+  const tbody = document.getElementById('driverTableBody');
+  tbody.innerHTML = state.drivers.map(d => {
+    const det = state.driverDetails[d] || {};
+    return `<tr>
+      <td style="font-weight:700">${esc(d)}</td>
+      <td style="color:var(--text-soft)">${esc(det.displayName || '')}</td>
+      <td style="color:var(--text-muted);font-size:11px">${esc(det.alias1 || '')}</td>
+      <td style="color:var(--text-muted);font-size:11px">${esc(det.alias2 || '')}</td>
+      <td style="color:var(--text-muted);font-size:11px">${esc(det.alias3 || '')}</td>
+      <td style="white-space:nowrap;text-align:right">
+        <button class="btn btn-gray btn-sm" style="padding:3px 8px;margin-right:4px" onclick="openDriverModal('${esc(d)}')">✏️</button>
+        <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="removeDriver('${esc(d)}')">×</button>
+      </td>
+    </tr>`;
+  }).join('');
 
-  // Dest master
-  document.getElementById('destMasterBody').innerHTML =
+  // Dest all table (MASTER + custom)
+  document.getElementById('destAllBody').innerHTML =
     getAllDests().map(d => {
       const custom = isCustomDest(d);
-      const delBtn = custom
-        ? `<button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="removeCustomDest('${esc(d)}')">削除</button>`
-        : `<span style="font-size:10px;color:var(--text-muted)">組込</span>`;
-      return `<tr${custom ? ' style="background:#f0fff4"' : ''}>` +
-        `<td>${esc(d)}</td>` +
-        `<td class="r">${getKm(d)} km</td>` +
-        `<td class="r">${getOtNormal(d)} h</td>` +
-        `<td class="r">${getOtHoliday(d)} h</td>` +
-        `<td style="text-align:center">${delBtn}</td></tr>`;
+      const startVal = getStartTime(d);
+      if (custom) {
+        // カスタム配送先: 全項目編集可（インライン）
+        return `<tr style="background:#f0fff4">
+          <td style="font-weight:700">${esc(d)}</td>
+          <td><input type="text" value="${esc(startVal)}" placeholder="HH:MM"
+            style="width:72px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px"
+            onchange="updateCustomDestField('${esc(d)}','startTime',this.value)"></td>
+          <td class="r">${getOtNormal(d)} h</td>
+          <td class="r">${getOtHoliday(d)} h</td>
+          <td class="r">${getKm(d)} km</td>
+          <td style="text-align:center">
+            <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="removeCustomDest('${esc(d)}')">削除</button>
+          </td>
+        </tr>`;
+      } else {
+        // MASTER配送先: 出勤時間のみ編集可
+        return `<tr>
+          <td style="font-weight:700">${esc(d)}</td>
+          <td>
+            <span id="destStart_disp_${esc(d)}" style="font-size:12px;cursor:pointer;color:${startVal ? 'var(--text-dark)' : 'var(--text-muted)'}"
+              onclick="startInlineEditDestStart('${esc(d)}')">${startVal || '──'} ✏️</span>
+            <input type="text" id="destStart_inp_${esc(d)}" value="${esc(startVal)}" placeholder="HH:MM"
+              style="display:none;width:72px;padding:3px 6px;border:1px solid var(--blue-light);border-radius:4px;font-size:12px"
+              onblur="commitInlineDestStart('${esc(d)}')"
+              onkeydown="if(event.key==='Enter')this.blur()">
+          </td>
+          <td class="r">${getOtNormal(d)} h</td>
+          <td class="r">${getOtHoliday(d)} h</td>
+          <td class="r">${getKm(d)} km</td>
+          <td style="text-align:center"><span style="font-size:10px;color:var(--text-muted)">組込</span></td>
+        </tr>`;
+      }
     }).join('');
 }
 
@@ -1235,6 +1321,7 @@ document.getElementById('newDestName').addEventListener('keydown', e => {
 
 function addCustomDest() {
   const name   = document.getElementById('newDestName').value.trim();
+  const start  = document.getElementById('newDestStart').value.trim();
   const km     = parseFloat(document.getElementById('newDestKm').value) || 0;
   const otWd   = parseFloat(document.getElementById('newDestOtWd').value) || 0;
   const otHol  = parseFloat(document.getElementById('newDestOtHol').value) || 0;
@@ -1243,10 +1330,11 @@ function addCustomDest() {
   if (getAllDests().includes(name)) { toast('同じ名前の配送先が既に存在します', 'err'); return; }
   if (km <= 0) { toast('km は 0 より大きい値を入力してください', 'err'); return; }
 
-  state.customDests.push({ name, km, ot_normal: otWd, ot_holiday: otHol });
+  state.customDests.push({ name, startTime: start, km, ot_normal: otWd, ot_holiday: otHol });
   saveState();
 
   document.getElementById('newDestName').value  = '';
+  document.getElementById('newDestStart').value = '';
   document.getElementById('newDestKm').value    = '';
   document.getElementById('newDestOtWd').value  = '';
   document.getElementById('newDestOtHol').value = '';
@@ -1263,20 +1351,45 @@ function removeCustomDest(name) {
   toast(`「${name}」を削除しました`);
 }
 
-document.getElementById('addDriverBtn').addEventListener('click', addDriver);
-document.getElementById('newDriverName').addEventListener('keydown', e => {
-  if (e.key === 'Enter') addDriver();
-});
+function updateCustomDestField(name, field, value) {
+  const c = state.customDests.find(c => c.name === name);
+  if (c) { c[field] = value; saveState(); }
+}
 
-function addDriver() {
-  const inp  = document.getElementById('newDriverName');
-  const name = inp.value.trim();
+// MASTER配送先の出勤時間インライン編集
+function startInlineEditDestStart(dest) {
+  document.getElementById('destStart_disp_' + dest).style.display = 'none';
+  const inp = document.getElementById('destStart_inp_' + dest);
+  inp.style.display = '';
+  inp.focus();
+  inp.select();
+}
+
+function commitInlineDestStart(dest) {
+  const inp = document.getElementById('destStart_inp_' + dest);
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!state.destCustom[dest]) state.destCustom[dest] = {};
+  state.destCustom[dest].startTime = val;
+  saveState();
+  inp.style.display = 'none';
+  const disp = document.getElementById('destStart_disp_' + dest);
+  if (disp) {
+    disp.textContent = (val || '──') + ' ✏️';
+    disp.style.color = val ? 'var(--text-dark)' : 'var(--text-muted)';
+    disp.style.display = '';
+  }
+}
+
+document.getElementById('addDriverBtn').addEventListener('click', () => openDriverModal(null));
+
+function addDriver(name, details) {
   if (!name) { toast('名前を入力してください', 'err'); return; }
   if (state.drivers.includes(name)) { toast('既に登録されています', 'err'); return; }
   if (state.drivers.length >= 80)   { toast('80名の上限に達しています', 'err'); return; }
   state.drivers.push(name);
+  if (details) state.driverDetails[name] = details;
   saveState();
-  inp.value = '';
   renderDriverSelect();
   renderManageTab();
   toast(`「${name}」を追加しました`);
@@ -1285,6 +1398,7 @@ function addDriver() {
 function removeDriver(name) {
   if (!confirm(`「${name}」を名簿から削除しますか？\n（入力データは保持されます）`)) return;
   state.drivers = state.drivers.filter(d => d !== name);
+  delete state.driverDetails[name];
   saveState();
   renderDriverSelect();
   renderManageTab();
@@ -1326,6 +1440,68 @@ function init() {
 }
 
 init();
+
+// ================================================================
+// Driver modal
+// ================================================================
+function openDriverModal(name) {
+  const modal = document.getElementById('driverModal');
+  const isEdit = name !== null && name !== undefined;
+  document.getElementById('driverModalTitle').textContent = isEdit ? 'ドライバー編集' : 'ドライバー追加';
+  document.getElementById('driverModalOrig').value = isEdit ? name : '';
+  document.getElementById('driverModalName').value = isEdit ? name : '';
+  const det = isEdit ? (state.driverDetails[name] || {}) : {};
+  document.getElementById('driverModalDisplay').value = det.displayName || '';
+  document.getElementById('driverModalAlias1').value  = det.alias1 || '';
+  document.getElementById('driverModalAlias2').value  = det.alias2 || '';
+  document.getElementById('driverModalAlias3').value  = det.alias3 || '';
+  modal.style.display = 'flex';
+}
+
+function closeDriverModal() {
+  document.getElementById('driverModal').style.display = 'none';
+}
+
+function saveDriverModal() {
+  const origName = document.getElementById('driverModalOrig').value;
+  const name     = document.getElementById('driverModalName').value.trim();
+  const display  = document.getElementById('driverModalDisplay').value.trim();
+  const alias1   = document.getElementById('driverModalAlias1').value.trim();
+  const alias2   = document.getElementById('driverModalAlias2').value.trim();
+  const alias3   = document.getElementById('driverModalAlias3').value.trim();
+
+  if (!name) { toast('氏名を入力してください', 'err'); return; }
+
+  const details = { displayName: display, alias1, alias2, alias3 };
+
+  if (origName) {
+    // 編集モード
+    if (name !== origName && state.drivers.includes(name)) {
+      toast('同じ名前のドライバーが既に存在します', 'err'); return;
+    }
+    const idx = state.drivers.indexOf(origName);
+    if (idx !== -1) state.drivers[idx] = name;
+    delete state.driverDetails[origName];
+    state.driverDetails[name] = details;
+  } else {
+    // 追加モード
+    if (state.drivers.includes(name)) { toast('既に登録されています', 'err'); return; }
+    if (state.drivers.length >= 80)   { toast('80名の上限に達しています', 'err'); return; }
+    state.drivers.push(name);
+    state.driverDetails[name] = details;
+  }
+
+  saveState();
+  renderDriverSelect();
+  renderManageTab();
+  closeDriverModal();
+  toast(`「${name}」を保存しました`);
+}
+
+// モーダル外クリックで閉じる
+document.getElementById('driverModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDriverModal();
+});
 </script>
 </body>
 </html>
