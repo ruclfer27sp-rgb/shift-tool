@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a365d">
+<title>シフト計算ツール</title>
+<style>
+:root {
+  --blue-dark:#1a365d; --blue-mid:#2b6cb0; --blue-light:#3182ce;
+  --blue-pale:#ebf8ff; --text-dark:#1a202c; --text-mid:#2d3748;
+  --text-soft:#4a5568; --text-muted:#718096; --bg:#f7fafc;
+  --white:#ffffff; --border:#e2e8f0; --success:#38a169;
+  --danger:#e53e3e; --shadow:0 2px 8px rgba(0,0,0,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Kaku Gothic Pro','Meiryo','Yu Gothic',sans-serif;
+  background:var(--bg);color:var(--text-dark);line-height:1.6;font-size:14px;
+  -webkit-tap-highlight-color:transparent}
+
+/* Header */
+.app-header{background:linear-gradient(135deg,var(--blue-dark),var(--blue-mid));
+  color:white;padding:14px 16px 0;position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+.app-title{font-size:17px;font-weight:800;margin-bottom:12px}
+.tabs{display:flex;gap:2px}
+.tab-btn{background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);
+  padding:9px 14px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .2s;white-space:nowrap}
+.tab-btn.active{background:var(--bg);color:var(--blue-dark)}
+.tab-btn:not(.active):hover{background:rgba(255,255,255,0.2);color:white}
+
+/* Tab panels */
+.tab-panel{display:none;padding:16px}
+.tab-panel.active{display:block}
+
+/* Card */
+.card{background:var(--white);border-radius:10px;box-shadow:var(--shadow);
+  padding:16px;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:700;color:var(--text-mid);margin-bottom:12px;
+  padding-bottom:8px;border-bottom:2px solid var(--border)}
+
+/* Form controls */
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+label{display:block;font-size:11px;font-weight:700;color:var(--text-muted);
+  margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+select,input[type=date],input[type=text],input[type=month],input[type=password]{
+  width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:14px;color:var(--text-dark);background:white;
+  -webkit-appearance:none;appearance:none;outline:none;transition:border-color .2s}
+select:focus,input:focus{border-color:var(--blue-light);
+  box-shadow:0 0 0 3px rgba(49,130,206,.1)}
+
+/* Day type toggle */
+.daytype-row{display:flex;gap:8px}
+.daytype-btn{flex:1;padding:9px;border:1.5px solid var(--border);border-radius:8px;
+  background:white;font-size:13px;font-weight:700;cursor:pointer;
+  transition:all .2s;color:var(--text-soft)}
+.daytype-btn.wd{background:#ebf8ff;border-color:var(--blue-light);color:var(--blue-dark)}
+.daytype-btn.hol{background:#fff5f5;border-color:#fc8181;color:#c53030}
+
+/* Dest grid */
+.dest-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media(max-width:600px){.dest-grid{grid-template-columns:repeat(2,1fr)}}
+.dest-card{background:white;border:1.5px solid var(--border);border-radius:10px;
+  padding:10px 8px;text-align:center;transition:all .15s}
+.dest-card.selected{border-color:var(--blue-light);background:var(--blue-pale)}
+.dest-name{font-size:12px;font-weight:700;color:var(--text-mid);
+  margin-bottom:2px;line-height:1.3}
+.dest-km{font-size:11px;color:var(--text-muted);margin-bottom:8px}
+.count-ctrl{display:flex;align-items:center;justify-content:center;gap:6px}
+.count-btn{width:28px;height:28px;border:1.5px solid var(--border);border-radius:50%;
+  background:white;font-size:18px;line-height:1;cursor:pointer;color:var(--blue-mid);
+  font-weight:700;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;padding:0}
+.count-btn:active{transform:scale(.9)}
+.count-btn.minus{color:#c53030;border-color:#fc8181}
+.count-val{font-size:16px;font-weight:800;min-width:20px}
+
+/* Result cards */
+.result-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+@media(max-width:600px){.result-grid{grid-template-columns:repeat(2,1fr)}}
+.result-card{background:white;border-radius:10px;box-shadow:var(--shadow);
+  padding:12px 8px;text-align:center}
+.result-label{font-size:10px;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.result-value{font-size:16px;font-weight:800;color:var(--blue-dark);line-height:1.2}
+
+/* Tables */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{background:var(--text-mid);color:#e2e8f0;padding:8px 10px;text-align:left;
+  font-size:10px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--border);
+  color:var(--text-mid);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#f7fafc}
+.tbl td:first-child{font-weight:700}
+.tbl th.r,.tbl td.r{text-align:right}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+/* Summary stats */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:600px){.stat-grid{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:white;border-radius:10px;box-shadow:var(--shadow);
+  padding:14px 12px;text-align:center}
+.stat-icon{font-size:22px;margin-bottom:4px}
+.stat-val{font-size:18px;font-weight:800;color:var(--blue-dark)}
+.stat-lbl{font-size:11px;color:var(--text-muted);margin-top:2px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;
+  border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;
+  transition:all .2s;white-space:nowrap}
+.btn-primary{background:var(--blue-light);color:white}
+.btn-primary:hover{background:var(--blue-mid)}
+.btn-danger{background:#fff5f5;color:#c53030;border:1.5px solid #fc8181}
+.btn-danger:hover{background:#fed7d7}
+.btn-success{background:#f0fff4;color:#276749;border:1.5px solid #9ae6b4}
+.btn-gray{background:#edf2f7;color:var(--text-soft);border:1.5px solid var(--border)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn:active{transform:scale(.97)}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+
+/* OCR */
+.upload-area{border:2.5px dashed var(--border);border-radius:12px;padding:28px 20px;
+  text-align:center;background:#f7fafc;transition:all .2s}
+.upload-area.drag-over{border-color:var(--blue-light);background:var(--blue-pale)}
+.upload-icon{font-size:36px;margin-bottom:10px}
+.upload-title{font-size:15px;font-weight:700;color:var(--text-mid);margin-bottom:6px}
+.upload-desc{font-size:12px;color:var(--text-muted)}
+.upload-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.upload-btn{padding:12px;border:1.5px solid var(--border);border-radius:10px;
+  background:white;font-size:13px;font-weight:700;cursor:pointer;color:var(--text-mid);
+  display:flex;flex-direction:column;align-items:center;gap:4px;transition:all .2s}
+.upload-btn:hover{border-color:var(--blue-light);background:var(--blue-pale)}
+.upload-btn .icon{font-size:22px}
+.ocr-preview{max-width:100%;border-radius:8px;margin-bottom:14px;box-shadow:var(--shadow)}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ocr-item{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;
+  margin-bottom:8px;background:white}
+.ocr-item.imported{border-color:#9ae6b4;background:#f0fff4}
+.ocr-item-name{font-weight:700;font-size:13px}
+.ocr-item-sub{color:var(--text-muted);font-size:12px;margin-top:1px}
+
+/* API key */
+.apikey-row{display:flex;gap:8px;align-items:flex-end}
+.apikey-row>div:first-child{flex:1}
+
+/* Manage */
+.driver-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--blue-pale);
+  border:1px solid #bee3f8;color:var(--blue-dark);border-radius:20px;
+  padding:5px 12px;font-size:13px;font-weight:600}
+.chip-del{background:none;border:none;color:#c53030;cursor:pointer;
+  font-size:15px;line-height:1;padding:0}
+.add-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:14px}
+.add-row input{flex:1}
+
+/* Info box */
+.info-box{background:#ebf8ff;border:1px solid #90cdf4;color:#1a365d;
+  border-radius:8px;padding:12px 14px;font-size:12px;margin-bottom:14px}
+.warn-box{background:#fffbeb;border:1px solid #f6e05e;color:#744210;
+  border-radius:8px;padding:12px 14px;font-size:12px;margin-bottom:14px}
+
+/* Rank badges */
+.rank{display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:800;margin-right:6px}
+.r1{background:#ffd700;color:#744210}
+.r2{background:#c0c0c0;color:#4a5568}
+.r3{background:#cd7f32;color:white}
+.rn{background:var(--border);color:var(--text-muted)}
+
+/* Toast */
+#toasts{position:fixed;bottom:20px;right:16px;z-index:9999;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;
+  box-shadow:0 4px 16px rgba(0,0,0,.15);animation:slideIn .3s ease;max-width:280px}
+.toast-ok{background:#276749;color:white}
+.toast-err{background:#c53030;color:white}
+@keyframes slideIn{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideOut{to{transform:translateX(120%);opacity:0}}
+
+/* Empty */
+.empty{text-align:center;padding:32px 20px;color:var(--text-muted);font-size:13px}
+.empty-icon{font-size:40px;margin-bottom:10px}
+
+/* Spinner block */
+.spinner-block{text-align:center;padding:24px;color:var(--text-muted);font-size:13px}
+
+/* iOS safe area & scroll */
+body { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tab-panel { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+
+/* Larger tap targets on mobile */
+@media(max-width:480px){
+  .count-btn{width:36px;height:36px;font-size:20px}
+  .count-val{font-size:18px;min-width:24px}
+  .btn{min-height:44px}
+  .tab-btn{padding:7px 9px;font-size:11px}
+  .dest-name{font-size:11px}
+  .result-grid{grid-template-columns:repeat(2,1fr)}
+  .ctrl-grid{grid-template-columns:1fr}
+  select,input[type=date],input[type=text],input[type=month],input[type=password]{
+    font-size:16px /* prevent iOS zoom */
+  }
+}
+@media(max-width:360px){
+  .tab-btn{padding:6px 7px;font-size:10px}
+  .app-title{font-size:14px}
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">🚛 シフト計算ツール</div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="input">📝 入力</button>
+    <button class="tab-btn" data-tab="summary">📊 集計</button>
+    <button class="tab-btn" data-tab="ocr">📷 写真取込</button>
+    <button class="tab-btn" data-tab="manage">👥 名簿</button>
+  </div>
+</header>
+
+<!-- ===== 入力タブ ===== -->
+<div class="tab-panel active" id="tab-input">
+  <div class="card">
+    <div class="card-title">入力設定</div>
+    <div class="ctrl-grid">
+      <div>
+        <label>ドライバー</label>
+        <select id="driverSelect"></select>
+      </div>
+      <div>
+        <label>日付</label>
+        <input type="date" id="dateInput">
+      </div>
+    </div>
+    <div>
+      <label>日種別</label>
+      <div class="daytype-row">
+        <button class="daytype-btn wd" id="btnWeekday">平日</button>
+        <button class="daytype-btn" id="btnHoliday">日・祝</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="result-grid" id="resultCards"></div>
+
+  <div class="card">
+    <input type="text" id="destSearch" placeholder="🔍 配送先を検索..." style="margin-bottom:10px">
+    <div id="destGrid" class="dest-grid"></div>
+  </div>
+
+  <div class="card" id="todayCard" style="display:none">
+    <div class="card-title">本日の入力明細</div>
+    <div class="table-wrap">
+      <table class="tbl" id="todayTable"></table>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn btn-danger btn-sm" id="clearDayBtn">🗑️ この日をリセット</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 集計タブ ===== -->
+<div class="tab-panel" id="tab-summary">
+  <div class="stat-grid" id="summaryStats"></div>
+  <div class="card">
+    <div class="action-row">
+      <button class="btn btn-primary" id="exportCsvBtn">⬇️ CSV エクスポート</button>
+      <button class="btn btn-success" id="refreshSummaryBtn">🔄 更新</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <label>月でフィルタ（任意）</label>
+      <div class="ctrl-grid">
+        <input type="month" id="summaryMonth">
+        <div></div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl" id="summaryTable">
+        <thead><tr>
+          <th>ドライバー</th>
+          <th class="r">出勤日数</th>
+          <th class="r">総 km</th>
+          <th class="r">賃金（円）</th>
+          <th class="r">平日残業h</th>
+          <th class="r">日祝残業h</th>
+        </tr></thead>
+        <tbody id="summaryBody"></tbody>
+      </table>
+    </div>
+    <div id="summaryEmpty" class="empty" style="display:none">
+      <div class="empty-icon">📋</div>データがありません
+    </div>
+  </div>
+</div>
+
+<!-- ===== OCRタブ ===== -->
+<div class="tab-panel" id="tab-ocr">
+  <div class="card">
+    <div class="card-title">📷 手書きシート取込（AI OCR）</div>
+    <div style="margin-bottom:14px">
+      <label>Anthropic API キー（OCR機能に必要）</label>
+      <div class="apikey-row">
+        <div><input type="password" id="apiKeyInput" placeholder="sk-ant-..."></div>
+        <button class="btn btn-gray btn-sm" id="toggleKeyBtn">👁️</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+        APIキーはlocalStorageに保存されます
+      </div>
+    </div>
+    <div class="upload-area" id="dropZone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-title">画像をドロップまたは選択</div>
+      <div class="upload-desc">JPG / PNG · Ctrl+V でペーストも可</div>
+      <div class="upload-btns">
+        <label class="upload-btn">
+          <span class="icon">📷</span>カメラ撮影
+          <input type="file" id="fileCamera" accept="image/*" capture="environment" style="display:none">
+        </label>
+        <label class="upload-btn">
+          <span class="icon">🖼️</span>写真を選ぶ
+          <input type="file" id="fileGallery" accept="image/*" style="display:none">
+        </label>
+      </div>
+    </div>
+  </div>
+  <div id="ocrResultArea"></div>
+</div>
+
+<!-- ===== 名簿タブ ===== -->
+<div class="tab-panel" id="tab-manage">
+  <div class="card">
+    <div class="card-title">👥 ドライバー名簿（最大80名）</div>
+    <div class="add-row">
+      <input type="text" id="newDriverName" placeholder="ドライバー名を入力" maxlength="30">
+      <button class="btn btn-primary" id="addDriverBtn">＋ 追加</button>
+    </div>
+    <div id="driverChips" class="driver-chips"></div>
+    <div style="font-size:11px;color:var(--text-muted)">
+      現在: <span id="driverCount">0</span>名
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📦 配送先マスター</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+      組み込みの配送先はHTMLのMASTERオブジェクトを編集してください。<br>
+      ここから追加した配送先はlocalStorageに保存されます。
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div style="grid-column:1/-1">
+        <label>配送先名</label>
+        <input type="text" id="newDestName" placeholder="例: XX倉庫" maxlength="40">
+      </div>
+      <div>
+        <label>平日 km</label>
+        <input type="text" id="newDestKm" placeholder="例: 120" inputmode="decimal">
+      </div>
+      <div>
+        <label>平日 残業h</label>
+        <input type="text" id="newDestOtWd" placeholder="例: 1.5" inputmode="decimal">
+      </div>
+      <div>
+        <label>日祝 残業h</label>
+        <input type="text" id="newDestOtHol" placeholder="例: 4.0" inputmode="decimal">
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn btn-primary" style="width:100%" id="addDestBtn">＋ 配送先を追加</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>配送先名</th><th class="r">平日 km</th>
+          <th class="r">平日 残業h</th><th class="r">日祝 残業h</th><th></th>
+        </tr></thead>
+        <tbody id="destMasterBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">💾 データ管理</div>
+    <div class="warn-box">⚠️ 月次締め後はCSVエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
+    <button class="btn btn-danger" id="clearAllBtn">🗑️ 全データ削除</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+// ================================================================
+// 定数
+// ================================================================
+const RATE_PER_KM = 8.67;
+
+// ================================================================
+// マスターデータ（実際のExcelデータに置き換えてください）
+// ================================================================
+const MASTER = {
+  drivers: [
+    "梶山","猪股","井上","宇留野","磯野","和田","生田目","吉成","川上","石井",
+    "根本（節）","山口","太田","福田","山田","金澤","越","寺門（真）","寺門（勇）","海老根",
+    "塩原","根本（真）","郡司","志賀","飛田","山岡","椿山","高橋","大森","林",
+    "浅尾","寺門（達）","小椋","関田","藤田（拓）","野口","神山","野上","川澄","室井",
+    "富田","鈴木","増本","中原","菱沼","品田"
+  ],
+  destinations: [
+    "アサヒGF　530","アサヒGF　520","アサヒGF　5：30　　積無","アステラス","天野屋 矢吹",
+    "茨城 グリコ","茨城中央食肉","茨城テクノス","小名浜サテライト","小名浜サテライト　1回",
+    "小名浜精錬","えひめ飲料","大内新興","笠原工業","勝田サテライト",
+    "勝田サテライト 積無","クレハ","ケミコン東日本","カゴメ","カナデビア 5：50",
+    "カナデビア 7：00","カナデビア 700 積無","カナデビア550 積無","小山寝装","原子力研究所",
+    "JX金属日立","JX金属日立　２回","JX金属 磯原","JX金属 磯原 5：50","JT 友部",
+    "品川 リフラクトリーズ","シマダヤ東北","常磐鹿島サテライト","常磐鹿島サテライト 1回","常磐都市ガス",
+    "新常磐寝具","住友ゴム","住友ゴム　７：３０","住友ゴム　積無","生化学工業",
+    "太子食品","太子食品　積無","高萩サテライト","高萩サテライト　1回","日鉄　ファインチューブ",
+    "東亜合成","東レ 那須","東部平","DNP","DNP　　脱圧",
+    "ニッセーデリカ","日曹金属","ニプロファーマ","ケミコン高萩","日本ジフィー",
+    "日本製紙 勿来","日本全薬","パラマウント　5：10　　積配","パラマウント　　６：５０","パラマウント　　８：３０",
+    "日立建機 那珂","日立建機 臨港","BS 栃木","BS　栃木　5：20","BS 那須",
+    "BS那須　積み無","BS　那須　6：50","富双合成","プロテリアル 豊浦","三井金属 喜多方",
+    "武蔵野科学","武蔵野科学 550","持田製薬","レゾナック喜多方","レゾナック 軽金属",
+    "レゾナック 山崎","レンゴー 利根川","レンゴー 福島","ロックウール","ROMS",
+    "有機合成","ヨークベニマル 仙台","寺岡製作所","待機","休み",
+    "積置","バンカリング","バンカリング 積置","バンカリング 卸","バンカリング指揮者","点呼"
+  ],
+  km_normal: {
+    "アサヒGF　530":330,"アサヒGF　520":340,"アサヒGF　5：30　　積無":340,"アステラス":102,"天野屋 矢吹":410,
+    "茨城 グリコ":68,"茨城中央食肉":104,"茨城テクノス":104,"小名浜サテライト":300,"小名浜サテライト　1回":150,
+    "小名浜精錬":150,"えひめ飲料":30,"大内新興":342,"笠原工業":380,"勝田サテライト":100,
+    "勝田サテライト 積無":100,"クレハ":136,"ケミコン東日本":450,"カゴメ":360,"カナデビア 5：50":150,
+    "カナデビア 7：00":150,"カナデビア 700 積無":140,"カナデビア550 積無":140,"小山寝装":244,"原子力研究所":20,
+    "JX金属日立":66,"JX金属日立　２回":132,"JX金属 磯原":110,"JX金属 磯原 5：50":120,"JT 友部":90,
+    "品川 リフラクトリーズ":170,"シマダヤ東北":330,"常磐鹿島サテライト":340,"常磐鹿島サテライト 1回":170,"常磐都市ガス":160,
+    "新常磐寝具":170,"住友ゴム":430,"住友ゴム　７：３０":430,"住友ゴム　積無":430,"生化学工業":102,
+    "太子食品":330,"太子食品　積無":330,"高萩サテライト":170,"高萩サテライト　1回":170,"日鉄　ファインチューブ":144,
+    "東亜合成":240,"東レ 那須":374,"東部平":180,"DNP":440,"DNP　　脱圧":440,
+    "ニッセーデリカ":424,"日曹金属":390,"ニプロファーマ":380,"ケミコン高萩":114,"日本ジフィー":70,
+    "日本製紙 勿来":138,"日本全薬":350,"パラマウント　5：10　　積配":380,"パラマウント　　６：５０":380,"パラマウント　　８：３０":380,
+    "日立建機 那珂":30,"日立建機 臨港":20,"BS 栃木":362,"BS　栃木　5：20":362,"BS 那須":380,
+    "BS那須　積み無":380,"BS　那須　6：50":380,"富双合成":478,"プロテリアル 豊浦":70,"三井金属 喜多方":450,
+    "武蔵野科学":120,"武蔵野科学 550":120,"持田製薬":350,"レゾナック喜多方":450,"レゾナック 軽金属":450,
+    "レゾナック 山崎":30,"レンゴー 利根川":0,"レンゴー 福島":396,"ロックウール":290,"ROMS":20,
+    "有機合成":170,"ヨークベニマル 仙台":540,"寺岡製作所":392,"待機":0,"休み":0,
+    "積置":20,"バンカリング":430,"バンカリング 積置":390,"バンカリング 卸":40,"バンカリング指揮者":0,"点呼":0
+  },
+  ot_normal: {
+    "アサヒGF　530":1.0,"アサヒGF　520":1.5,"アサヒGF　5：30　　積無":0,"アステラス":0,"天野屋 矢吹":1.5,
+    "茨城 グリコ":0,"茨城中央食肉":0,"茨城テクノス":0,"小名浜サテライト":4.0,"小名浜サテライト　1回":0,
+    "小名浜精錬":0,"えひめ飲料":0,"大内新興":1.0,"笠原工業":2.0,"勝田サテライト":2.0,
+    "勝田サテライト 積無":1.0,"クレハ":0,"ケミコン東日本":3.5,"カゴメ":1.17,"カナデビア 5：50":3.5,
+    "カナデビア 7：00":2.5,"カナデビア 700 積無":1.0,"カナデビア550 積無":3.0,"小山寝装":1.0,"原子力研究所":0,
+    "JX金属日立":0,"JX金属日立　２回":3.5,"JX金属 磯原":0,"JX金属 磯原 5：50":2.0,"JT 友部":0,
+    "品川 リフラクトリーズ":0,"シマダヤ東北":3.0,"常磐鹿島サテライト":3.5,"常磐鹿島サテライト 1回":0,"常磐都市ガス":0,
+    "新常磐寝具":0,"住友ゴム":3.0,"住友ゴム　７：３０":3.0,"住友ゴム　積無":2.0,"生化学工業":0,
+    "太子食品":1.5,"太子食品　積無":0,"高萩サテライト":2.0,"高萩サテライト　1回":0,"日鉄　ファインチューブ":0,
+    "東亜合成":0,"東レ 那須":1.5,"東部平":0,"DNP":3.0,"DNP　　脱圧":3.67,
+    "ニッセーデリカ":4.0,"日曹金属":3.5,"ニプロファーマ":1.33,"ケミコン高萩":0,"日本ジフィー":0,
+    "日本製紙 勿来":0,"日本全薬":1.0,"パラマウント　5：10　　積配":1.0,"パラマウント　　６：５０":2.0,"パラマウント　　８：３０":2.0,
+    "日立建機 那珂":0,"日立建機 臨港":0,"BS 栃木":2.0,"BS　栃木　5：20":2.5,"BS 那須":1.67,
+    "BS那須　積み無":1.33,"BS　那須　6：50":1.67,"富双合成":3.5,"プロテリアル 豊浦":0,"三井金属 喜多方":4.0,
+    "武蔵野科学":0,"武蔵野科学 550":2.0,"持田製薬":2.0,"レゾナック喜多方":3.0,"レゾナック 軽金属":3.0,
+    "レゾナック 山崎":0,"レンゴー 利根川":0,"レンゴー 福島":1.5,"ロックウール":0,"ROMS":0,
+    "有機合成":0,"ヨークベニマル 仙台":3.5,"寺岡製作所":3.5,"待機":0,"休み":0,
+    "積置":0,"バンカリング":4.5,"バンカリング 積置":1.0,"バンカリング 卸":0,"バンカリング指揮者":0.5,"点呼":0
+  },
+  ot_holiday: {
+    "アサヒGF　530":8.58,"アサヒGF　520":9.08,"アサヒGF　5：30　　積無":7.58,"アステラス":5.5,"天野屋 矢吹":9.0,
+    "茨城 グリコ":7.58,"茨城中央食肉":6.0,"茨城テクノス":7.58,"小名浜サテライト":11.58,"小名浜サテライト　1回":7.58,
+    "小名浜精錬":7.58,"えひめ飲料":4.5,"大内新興":8.58,"笠原工業":9.58,"勝田サテライト":9.58,
+    "勝田サテライト 積無":8.58,"クレハ":7.58,"ケミコン東日本":11.08,"カゴメ":8.75,"カナデビア 5：50":11.08,
+    "カナデビア 7：00":10.08,"カナデビア 700 積無":8.58,"カナデビア550 積無":10.58,"小山寝装":8.58,"原子力研究所":5.0,
+    "JX金属日立":7.58,"JX金属日立　２回":11.0,"JX金属 磯原":7.58,"JX金属 磯原 5：50":9.58,"JT 友部":5.0,
+    "品川 リフラクトリーズ":7.58,"シマダヤ東北":10.58,"常磐鹿島サテライト":11.08,"常磐鹿島サテライト 1回":6.0,"常磐都市ガス":7.58,
+    "新常磐寝具":7.58,"住友ゴム":10.58,"住友ゴム　７：３０":10.58,"住友ゴム　積無":8.67,"生化学工業":7.58,
+    "太子食品":9.08,"太子食品　積無":8.33,"高萩サテライト":9.58,"高萩サテライト　1回":6.0,"日鉄　ファインチューブ":7.58,
+    "東亜合成":7.58,"東レ 那須":9.08,"東部平":7.58,"DNP":10.58,"DNP　　脱圧":11.0,
+    "ニッセーデリカ":11.58,"日曹金属":11.08,"ニプロファーマ":9.08,"ケミコン高萩":7.58,"日本ジフィー":7.58,
+    "日本製紙 勿来":7.58,"日本全薬":8.58,"パラマウント　5：10　　積配":8.58,"パラマウント　　６：５０":9.42,"パラマウント　　８：３０":9.42,
+    "日立建機 那珂":7.58,"日立建機 臨港":7.58,"BS 栃木":9.58,"BS　栃木　5：20":10.0,"BS 那須":9.58,
+    "BS那須　積み無":8.58,"BS　那須　6：50":9.0,"富双合成":11.08,"プロテリアル 豊浦":7.58,"三井金属 喜多方":11.58,
+    "武蔵野科学":7.58,"武蔵野科学 550":9.58,"持田製薬":9.58,"レゾナック喜多方":10.58,"レゾナック 軽金属":10.58,
+    "レゾナック 山崎":5.0,"レンゴー 利根川":0,"レンゴー 福島":9.0,"ロックウール":7.58,"ROMS":7.0,
+    "有機合成":7.58,"ヨークベニマル 仙台":10.08,"寺岡製作所":11.08,"待機":0,"休み":0,
+    "積置":1.0,"バンカリング":12.08,"バンカリング 積置":8.0,"バンカリング 卸":5.5,"バンカリング指揮者":8.0,"点呼":7.58
+  }
+};
+
+// ================================================================
+// State
+// ================================================================
+let state = {
+  drivers: [...MASTER.drivers],
+  entries: [],
+  customDests: [],
+  currentDriver: '',
+  currentDate: '',
+  currentDayType: 'weekday'
+};
+
+// 組み込み + カスタムを合わせた配送先アクセサ
+function getAllDests() {
+  const added = state.customDests.map(c => c.name)
+    .filter(n => !MASTER.destinations.includes(n));
+  return [...MASTER.destinations, ...added];
+}
+function getKm(dest) {
+  if (dest in MASTER.km_normal) return MASTER.km_normal[dest];
+  return state.customDests.find(c => c.name === dest)?.km ?? 0;
+}
+function getOtNormal(dest) {
+  if (dest in MASTER.ot_normal) return MASTER.ot_normal[dest];
+  return state.customDests.find(c => c.name === dest)?.ot_normal ?? 0;
+}
+function getOtHoliday(dest) {
+  if (dest in MASTER.ot_holiday) return MASTER.ot_holiday[dest];
+  return state.customDests.find(c => c.name === dest)?.ot_holiday ?? 0;
+}
+function isCustomDest(dest) {
+  return !MASTER.destinations.includes(dest) &&
+    state.customDests.some(c => c.name === dest);
+}
+let ocrResults = [];
+let ocrConfig  = { driver: '', date: '', dayType: 'weekday' };
+let destFilter = '';
+
+// ================================================================
+// Persistence
+// ================================================================
+function saveState() {
+  localStorage.setItem('sc_entries',     JSON.stringify(state.entries));
+  localStorage.setItem('sc_drivers',     JSON.stringify(state.drivers));
+  localStorage.setItem('sc_customDests', JSON.stringify(state.customDests));
+}
+function loadState() {
+  try {
+    const e  = localStorage.getItem('sc_entries');
+    const d  = localStorage.getItem('sc_drivers');
+    const cd = localStorage.getItem('sc_customDests');
+    if (e)  state.entries     = JSON.parse(e);
+    if (d)  state.drivers     = JSON.parse(d);
+    if (cd) state.customDests = JSON.parse(cd);
+  } catch(ex) { console.warn('loadState error', ex); }
+}
+function saveApiKey() {
+  localStorage.setItem('sc_apikey', document.getElementById('apiKeyInput').value);
+}
+function loadApiKey() {
+  document.getElementById('apiKeyInput').value =
+    localStorage.getItem('sc_apikey') || '';
+}
+
+// ================================================================
+// Utilities
+// ================================================================
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtKm(n)   { return Math.round(n).toLocaleString('ja-JP') + ' km'; }
+function fmtWage(n) { return '¥' + Math.round(n).toLocaleString('ja-JP'); }
+function fmtOt(n)   { return n.toFixed(1) + ' h'; }
+
+function toast(msg, type='ok') {
+  const ct = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  ct.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'slideOut .4s ease forwards';
+    setTimeout(() => el.remove(), 400);
+  }, 3000);
+}
+
+// ================================================================
+// Tab switching
+// ================================================================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.tab;
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    btn.classList.add('active');
+    if (id === 'summary') updateSummary();
+    if (id === 'manage')  renderManageTab();
+  });
+});
+
+// ================================================================
+// Input tab – driver / date / daytype
+// ================================================================
+function renderDriverSelect() {
+  const sel = document.getElementById('driverSelect');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-- ドライバーを選択 --</option>';
+  state.drivers.forEach(d => {
+    const o = document.createElement('option');
+    o.value = o.textContent = d;
+    if (d === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+document.getElementById('driverSelect').addEventListener('change', () => {
+  state.currentDriver = document.getElementById('driverSelect').value;
+  renderDestList();
+  updateResult();
+});
+
+document.getElementById('dateInput').addEventListener('change', () => {
+  state.currentDate = document.getElementById('dateInput').value;
+  renderDestList();
+  updateResult();
+});
+
+document.getElementById('btnWeekday').addEventListener('click', () => setDayType('weekday'));
+document.getElementById('btnHoliday').addEventListener('click', () => setDayType('holiday'));
+
+function setDayType(type) {
+  state.currentDayType = type;
+  document.getElementById('btnWeekday').className =
+    'daytype-btn' + (type === 'weekday' ? ' wd' : '');
+  document.getElementById('btnHoliday').className =
+    'daytype-btn' + (type === 'holiday' ? ' hol' : '');
+  renderDestList();
+  updateResult();
+}
+
+// ================================================================
+// Destination grid
+// ================================================================
+document.getElementById('destSearch').addEventListener('input', function() {
+  destFilter = this.value.toLowerCase();
+  renderDestList();
+});
+
+function renderDestList() {
+  const grid = document.getElementById('destGrid');
+  grid.innerHTML = '';
+
+  if (!state.currentDriver || !state.currentDate) {
+    grid.innerHTML =
+      '<div style="color:var(--text-muted);font-size:13px;padding:16px;grid-column:1/-1">' +
+      'ドライバーと日付を選択してください</div>';
+    return;
+  }
+
+  const filtered = getAllDests().filter(d =>
+    d.toLowerCase().includes(destFilter)
+  );
+
+  if (filtered.length === 0) {
+    grid.innerHTML =
+      '<div style="color:var(--text-muted);font-size:13px;padding:16px;grid-column:1/-1">' +
+      '一致する配送先がありません</div>';
+    return;
+  }
+
+  filtered.forEach(dest => {
+    const count = getCount(dest);
+    const km    = getKm(dest);
+    const card  = document.createElement('div');
+    card.className = 'dest-card' + (count > 0 ? ' selected' : '');
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'dest-name';
+    nameEl.textContent = dest;
+
+    const kmEl = document.createElement('div');
+    kmEl.className = 'dest-km';
+    kmEl.textContent = km + ' km';
+
+    const ctrl = document.createElement('div');
+    ctrl.className = 'count-ctrl';
+
+    const btnM = document.createElement('button');
+    btnM.className = 'count-btn minus';
+    btnM.textContent = '－';
+    btnM.addEventListener('click', () => changeCount(dest, -1));
+
+    const valEl = document.createElement('span');
+    valEl.className = 'count-val';
+    valEl.textContent = count;
+
+    const btnP = document.createElement('button');
+    btnP.className = 'count-btn';
+    btnP.textContent = '＋';
+    btnP.addEventListener('click', () => changeCount(dest, 1));
+
+    ctrl.append(btnM, valEl, btnP);
+    card.append(nameEl, kmEl, ctrl);
+    grid.appendChild(card);
+  });
+}
+
+function getCount(dest) {
+  const e = state.entries.find(e =>
+    e.driver  === state.currentDriver &&
+    e.date    === state.currentDate   &&
+    e.dayType === state.currentDayType &&
+    e.dest    === dest
+  );
+  return e ? e.count : 0;
+}
+
+function changeCount(dest, delta) {
+  if (!state.currentDriver) { toast('ドライバーを選択してください', 'err'); return; }
+  if (!state.currentDate)   { toast('日付を入力してください', 'err'); return; }
+
+  const old = getCount(dest);
+  const next = Math.max(0, old + delta);
+
+  state.entries = state.entries.filter(e =>
+    !(e.driver === state.currentDriver && e.date === state.currentDate &&
+      e.dayType === state.currentDayType && e.dest === dest)
+  );
+
+  if (next > 0) {
+    const km  = getKm(dest) * next;
+    const ot  = (state.currentDayType === 'weekday' ? getOtNormal(dest) : getOtHoliday(dest)) * next;
+    state.entries.push({
+      driver: state.currentDriver, date: state.currentDate,
+      dayType: state.currentDayType, dest, count: next, km, ot
+    });
+  }
+
+  saveState();
+  renderDestList();
+  updateResult();
+}
+
+document.getElementById('clearDayBtn').addEventListener('click', () => {
+  if (!state.currentDriver || !state.currentDate) return;
+  if (!confirm(`${state.currentDriver}の${state.currentDate}（${state.currentDayType === 'weekday' ? '平日' : '日祝'}）のデータをリセットしますか？`)) return;
+  state.entries = state.entries.filter(e =>
+    !(e.driver === state.currentDriver && e.date === state.currentDate &&
+      e.dayType === state.currentDayType)
+  );
+  saveState();
+  renderDestList();
+  updateResult();
+  toast('リセットしました');
+});
+
+// ================================================================
+// Result panel
+// ================================================================
+function updateResult() {
+  const drv = state.currentDriver;
+  const dt  = state.currentDate;
+  const all = state.entries.filter(e => e.driver === drv);
+  const day = all.filter(e => e.date === dt && e.dayType === state.currentDayType);
+
+  const todayKm  = day.reduce((s, e) => s + e.km, 0);
+  const totalKm  = all.reduce((s, e) => s + e.km, 0);
+  const totalWage = totalKm * RATE_PER_KM;
+  const totalOt   = all.reduce((s, e) => s + e.ot, 0);
+  const days      = new Set(all.map(e => e.date)).size;
+
+  const cards = [
+    { icon:'🚗', label:'本日 km',   val: drv ? fmtKm(todayKm)    : '--' },
+    { icon:'📍', label:'累計 km',   val: drv ? fmtKm(totalKm)    : '--' },
+    { icon:'💴', label:'累計 賃金', val: drv ? fmtWage(totalWage) : '--' },
+    { icon:'⏱️', label:'累計 残業', val: drv ? fmtOt(totalOt)    : '--' },
+    { icon:'📅', label:'出勤日数',  val: drv ? days + ' 日'       : '--' }
+  ];
+
+  document.getElementById('resultCards').innerHTML = cards.map(c =>
+    `<div class="result-card">
+      <div class="result-label">${c.icon} ${c.label}</div>
+      <div class="result-value">${esc(c.val)}</div>
+    </div>`
+  ).join('');
+
+  const todayCard = document.getElementById('todayCard');
+  const todayTbl  = document.getElementById('todayTable');
+
+  if (day.length > 0) {
+    todayCard.style.display = '';
+    const rows = day.map(e =>
+      `<tr><td>${esc(e.dest)}</td><td class="r">${e.count}回</td>` +
+      `<td class="r">${fmtKm(e.km)}</td><td class="r">${fmtOt(e.ot)}</td></tr>`
+    ).join('');
+    const sumKm = day.reduce((s,e)=>s+e.km,0);
+    const sumOt = day.reduce((s,e)=>s+e.ot,0);
+    todayTbl.innerHTML =
+      `<thead><tr><th>配送先</th><th class="r">回数</th><th class="r">km</th><th class="r">残業h</th></tr></thead>` +
+      `<tbody>${rows}` +
+      `<tr style="font-weight:800;background:#f7fafc">` +
+      `<td>合計</td><td></td><td class="r">${fmtKm(sumKm)}</td><td class="r">${fmtOt(sumOt)}</td></tr>` +
+      `</tbody>`;
+  } else {
+    todayCard.style.display = 'none';
+  }
+}
+
+// ================================================================
+// Summary tab
+// ================================================================
+function updateSummary() {
+  const mf = document.getElementById('summaryMonth').value;
+  const entries = mf
+    ? state.entries.filter(e => e.date.startsWith(mf))
+    : state.entries;
+
+  const map = {};
+  entries.forEach(e => {
+    if (!map[e.driver]) map[e.driver] = { km:0, otWd:0, otHol:0, dates:new Set() };
+    map[e.driver].km += e.km;
+    if (e.dayType === 'weekday') map[e.driver].otWd  += e.ot;
+    else                         map[e.driver].otHol += e.ot;
+    map[e.driver].dates.add(e.date);
+  });
+
+  const rows = Object.entries(map)
+    .map(([drv, d]) => ({
+      drv, km: d.km, otWd: d.otWd, otHol: d.otHol,
+      days: d.dates.size, wage: d.km * RATE_PER_KM
+    }))
+    .sort((a, b) => b.km - a.km);
+
+  const totKm   = rows.reduce((s,r)=>s+r.km, 0);
+  const totWage = rows.reduce((s,r)=>s+r.wage, 0);
+  const totOt   = rows.reduce((s,r)=>s+r.otWd+r.otHol, 0);
+
+  document.getElementById('summaryStats').innerHTML = `
+    <div class="stat-card"><div class="stat-icon">📍</div>
+      <div class="stat-val">${Math.round(totKm).toLocaleString()}</div>
+      <div class="stat-lbl">総走行距離 km</div></div>
+    <div class="stat-card"><div class="stat-icon">💴</div>
+      <div class="stat-val">${Math.round(totWage/10000)}万</div>
+      <div class="stat-lbl">総賃金</div></div>
+    <div class="stat-card"><div class="stat-icon">⏱️</div>
+      <div class="stat-val">${totOt.toFixed(1)}</div>
+      <div class="stat-lbl">総残業時間 h</div></div>
+    <div class="stat-card"><div class="stat-icon">👥</div>
+      <div class="stat-val">${rows.length}</div>
+      <div class="stat-lbl">実働ドライバー</div></div>`;
+
+  const empty = document.getElementById('summaryEmpty');
+  const tbody = document.getElementById('summaryBody');
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const rankCls = ['r1','r2','r3'];
+  tbody.innerHTML = rows.map((r, i) => {
+    const badge = i < 3
+      ? `<span class="rank ${rankCls[i]}">${['🥇','🥈','🥉'][i]}</span>`
+      : `<span class="rank rn">${i+1}</span>`;
+    return `<tr>
+      <td>${badge}${esc(r.drv)}</td>
+      <td class="r">${r.days}日</td>
+      <td class="r">${Math.round(r.km).toLocaleString()} km</td>
+      <td class="r">${fmtWage(r.wage)}</td>
+      <td class="r">${fmtOt(r.otWd)}</td>
+      <td class="r">${fmtOt(r.otHol)}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('refreshSummaryBtn').addEventListener('click', updateSummary);
+
+document.getElementById('summaryMonth').addEventListener('input', updateSummary);
+
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  if (state.entries.length === 0) { toast('エクスポートするデータがありません', 'err'); return; }
+  const header = ['ドライバー','日付','日種別','配送先','回数','km','賃金','残業h'];
+  const rows   = state.entries.map(e => [
+    e.driver, e.date,
+    e.dayType === 'weekday' ? '平日' : '日祝',
+    e.dest, e.count, e.km,
+    Math.round(e.km * RATE_PER_KM), e.ot
+  ]);
+  const csv = '\uFEFF' + [header, ...rows]
+    .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `シフト_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSVをエクスポートしました');
+});
+
+// ================================================================
+// OCR tab
+// ================================================================
+document.getElementById('apiKeyInput').addEventListener('input', saveApiKey);
+
+document.getElementById('toggleKeyBtn').addEventListener('click', () => {
+  const inp = document.getElementById('apiKeyInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+});
+
+document.getElementById('dropZone').addEventListener('dragover', e => {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.add('drag-over');
+});
+document.getElementById('dropZone').addEventListener('dragleave', () => {
+  document.getElementById('dropZone').classList.remove('drag-over');
+});
+document.getElementById('dropZone').addEventListener('drop', e => {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) processFile(f);
+});
+
+document.getElementById('fileCamera').addEventListener('change', function() {
+  if (this.files[0]) processFile(this.files[0]);
+});
+document.getElementById('fileGallery').addEventListener('change', function() {
+  if (this.files[0]) processFile(this.files[0]);
+});
+
+document.addEventListener('paste', e => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-ocr').classList.add('active');
+      document.querySelector('[data-tab="ocr"]').classList.add('active');
+      processFile(item.getAsFile());
+      break;
+    }
+  }
+});
+
+function processFile(file) {
+  if (!file) return;
+  const area = document.getElementById('ocrResultArea');
+  area.innerHTML = '<div class="spinner-block"><div class="spin" style="font-size:28px">⏳</div><div style="margin-top:8px">画像を読み込み中...</div></div>';
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl  = ev.target.result;
+    const base64   = dataUrl.split(',')[1];
+    const mimeType = file.type || 'image/jpeg';
+
+    area.innerHTML =
+      `<div class="card"><img src="${dataUrl}" class="ocr-preview">` +
+      `<div class="spinner-block"><div class="spin" style="font-size:28px">🤖</div>` +
+      `<div style="margin-top:8px">AIが読み取り中...</div></div></div>`;
+
+    callOCR(base64, mimeType)
+      .then(txt => parseOCRResult(txt, dataUrl))
+      .catch(err => {
+        area.innerHTML =
+          `<div class="card" style="color:#c53030">⚠️ エラー: ${esc(err.message)}</div>`;
+      });
+  };
+  reader.readAsDataURL(file);
+}
+
+async function callOCR(base64, mimeType) {
+  const apiKey = document.getElementById('apiKeyInput').value.trim();
+  if (!apiKey) throw new Error('APIキーを入力してください');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-6',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
+          { type: 'text', text:
+            `この画像は運送会社のシフト表または手書きシートです。\n` +
+            `画像から以下の情報を読み取ってください：\n` +
+            `1. ドライバー名（記載があれば）\n` +
+            `2. 日付（記載があれば YYYY-MM-DD 形式で。年の記載がなければ今年 ${new Date().getFullYear()} 年とする）\n` +
+            `3. 配送先名と回数（数字が書いてある配送先）\n\n` +
+            `回答は以下のJSON形式のみで返してください（説明文なし）：\n` +
+            `{"driver":"ドライバー名または空文字","date":"YYYY-MM-DDまたは空文字","entries":[{"dest":"配送先名","count":1}]}\n\n` +
+            `配送先の候補: ${MASTER.destinations.slice(0,30).join('、')} など`
+          }
+        ]
+      }]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `APIエラー (${res.status})`);
+  }
+  return (await res.json()).content[0].text;
+}
+
+function parseOCRResult(text, imgDataUrl) {
+  let parsed = null;
+  try {
+    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    parsed = JSON.parse(clean);
+  } catch {
+    document.getElementById('ocrResultArea').innerHTML =
+      `<div class="card">${imgDataUrl ? `<img src="${imgDataUrl}" class="ocr-preview">` : ''}` +
+      `<div class="card-title">読み取り結果（手動確認が必要）</div>` +
+      `<pre style="font-size:12px;overflow-x:auto;white-space:pre-wrap">${esc(text)}</pre></div>`;
+    return;
+  }
+
+  ocrResults = parsed.entries || [];
+
+  // OCR検出値をocrConfigにセット（ドライバー・日付）
+  ocrConfig.driver  = parsed.driver || state.currentDriver || '';
+  ocrConfig.date    = parsed.date   || state.currentDate   || '';
+  ocrConfig.dayType = state.currentDayType;
+
+  // ドライバー選択肢HTML
+  const drvOpts = state.drivers.map(d =>
+    `<option value="${esc(d)}"${d === ocrConfig.driver ? ' selected' : ''}>${esc(d)}</option>`
+  ).join('');
+
+  const settingsCard = `
+    <div class="card" id="ocrSettingsCard">
+      <div class="card-title">📋 取込設定（確認・修正してください）</div>
+      <div class="ctrl-grid" style="margin-bottom:10px">
+        <div>
+          <label>ドライバー</label>
+          <select id="ocrDriverSel">
+            <option value="">-- 選択 --</option>
+            ${drvOpts}
+          </select>
+        </div>
+        <div>
+          <label>日付</label>
+          <input type="date" id="ocrDateInput" value="${esc(ocrConfig.date)}">
+        </div>
+      </div>
+      <div>
+        <label>日種別</label>
+        <div class="daytype-row">
+          <button class="daytype-btn${ocrConfig.dayType==='weekday' ? ' wd' : ''}" id="ocrBtnWd" onclick="setOcrDayType('weekday')">平日</button>
+          <button class="daytype-btn${ocrConfig.dayType==='holiday' ? ' hol' : ''}" id="ocrBtnHol" onclick="setOcrDayType('holiday')">日・祝</button>
+        </div>
+      </div>
+    </div>`;
+
+  const items = ocrResults.map((item, i) => {
+    const km = getKm(item.dest);
+    const kmStr = km ? fmtKm(km * item.count) : '⚠️ 配送先不明';
+    return `<div class="ocr-item" id="ocri-${i}">
+      <div>
+        <div class="ocr-item-name">${esc(item.dest)}</div>
+        <div class="ocr-item-sub">${item.count}回 / ${kmStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const bulkBtn = ocrResults.length > 0
+    ? `<div style="margin-top:14px">
+        <button class="btn btn-primary" style="width:100%;font-size:15px;padding:14px" onclick="importAllOCR()">
+          ✅ ${ocrResults.length}件を一括取込
+        </button>
+       </div>`
+    : '<div style="color:var(--text-muted)">配送データが読み取れませんでした</div>';
+
+  document.getElementById('ocrResultArea').innerHTML =
+    settingsCard +
+    `<div class="card">` +
+    (imgDataUrl ? `<img src="${imgDataUrl}" class="ocr-preview">` : '') +
+    `<div class="card-title">読み取り結果（${ocrResults.length}件）</div>` +
+    items + bulkBtn + `</div>`;
+}
+
+function setOcrDayType(type) {
+  ocrConfig.dayType = type;
+  document.getElementById('ocrBtnWd').className  = 'daytype-btn' + (type==='weekday' ? ' wd'  : '');
+  document.getElementById('ocrBtnHol').className = 'daytype-btn' + (type==='holiday' ? ' hol' : '');
+}
+
+function importAllOCR() {
+  const driver  = document.getElementById('ocrDriverSel')?.value  || ocrConfig.driver;
+  const date    = document.getElementById('ocrDateInput')?.value   || ocrConfig.date;
+  const dayType = ocrConfig.dayType;
+
+  if (!driver) { toast('ドライバーを選択してください', 'err'); return; }
+  if (!date)   { toast('日付を入力してください', 'err'); return; }
+
+  let cnt = 0, skip = 0;
+  ocrResults.forEach((item, i) => {
+    if (doImportOCR(item.dest, item.count, driver, date, dayType, true)) {
+      cnt++;
+      const el = document.getElementById(`ocri-${i}`);
+      if (el) el.classList.add('imported');
+    } else { skip++; }
+  });
+
+  const msg = skip > 0
+    ? `${cnt}件取込・${skip}件スキップ（配送先不明）`
+    : `${cnt}件を取込みました`;
+  toast(msg, cnt > 0 ? 'ok' : 'err');
+
+  // 入力タブの選択も同期
+  if (driver !== state.currentDriver || date !== state.currentDate) {
+    document.getElementById('driverSelect').value = driver;
+    state.currentDriver = driver;
+    document.getElementById('dateInput').value = date;
+    state.currentDate = date;
+    if (dayType !== state.currentDayType) setDayType(dayType);
+    renderDestList();
+    updateResult();
+  }
+}
+
+function doImportOCR(dest, count, driver, date, dayType, silent) {
+  if (!getAllDests().includes(dest)) {
+    if (!silent) toast(`「${dest}」はマスターにありません`, 'err');
+    return false;
+  }
+  state.entries = state.entries.filter(e =>
+    !(e.driver === driver && e.date === date && e.dayType === dayType && e.dest === dest)
+  );
+  const km = getKm(dest) * count;
+  const ot = (dayType === 'weekday' ? getOtNormal(dest) : getOtHoliday(dest)) * count;
+  state.entries.push({ driver, date, dayType, dest, count, km, ot });
+  saveState();
+  updateResult();
+  if (!silent) toast(`「${dest}」を取込みました`);
+  return true;
+}
+
+// ================================================================
+// Manage tab
+// ================================================================
+function renderManageTab() {
+  // Driver chips
+  const chips = document.getElementById('driverChips');
+  chips.innerHTML = '';
+  state.drivers.forEach(d => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = d;
+    const del = document.createElement('button');
+    del.className = 'chip-del';
+    del.textContent = '×';
+    del.title = '削除';
+    del.addEventListener('click', () => removeDriver(d));
+    chip.appendChild(del);
+    chips.appendChild(chip);
+  });
+  document.getElementById('driverCount').textContent = state.drivers.length;
+
+  // Dest master
+  document.getElementById('destMasterBody').innerHTML =
+    getAllDests().map(d => {
+      const custom = isCustomDest(d);
+      const delBtn = custom
+        ? `<button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="removeCustomDest('${esc(d)}')">削除</button>`
+        : `<span style="font-size:10px;color:var(--text-muted)">組込</span>`;
+      return `<tr${custom ? ' style="background:#f0fff4"' : ''}>` +
+        `<td>${esc(d)}</td>` +
+        `<td class="r">${getKm(d)} km</td>` +
+        `<td class="r">${getOtNormal(d)} h</td>` +
+        `<td class="r">${getOtHoliday(d)} h</td>` +
+        `<td style="text-align:center">${delBtn}</td></tr>`;
+    }).join('');
+}
+
+document.getElementById('addDestBtn').addEventListener('click', addCustomDest);
+document.getElementById('newDestName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addCustomDest();
+});
+
+function addCustomDest() {
+  const name   = document.getElementById('newDestName').value.trim();
+  const km     = parseFloat(document.getElementById('newDestKm').value) || 0;
+  const otWd   = parseFloat(document.getElementById('newDestOtWd').value) || 0;
+  const otHol  = parseFloat(document.getElementById('newDestOtHol').value) || 0;
+
+  if (!name) { toast('配送先名を入力してください', 'err'); return; }
+  if (getAllDests().includes(name)) { toast('同じ名前の配送先が既に存在します', 'err'); return; }
+  if (km <= 0) { toast('km は 0 より大きい値を入力してください', 'err'); return; }
+
+  state.customDests.push({ name, km, ot_normal: otWd, ot_holiday: otHol });
+  saveState();
+
+  document.getElementById('newDestName').value  = '';
+  document.getElementById('newDestKm').value    = '';
+  document.getElementById('newDestOtWd').value  = '';
+  document.getElementById('newDestOtHol').value = '';
+
+  renderManageTab();
+  toast(`「${name}」を追加しました`);
+}
+
+function removeCustomDest(name) {
+  if (!confirm(`「${name}」を配送先マスターから削除しますか？`)) return;
+  state.customDests = state.customDests.filter(c => c.name !== name);
+  saveState();
+  renderManageTab();
+  toast(`「${name}」を削除しました`);
+}
+
+document.getElementById('addDriverBtn').addEventListener('click', addDriver);
+document.getElementById('newDriverName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addDriver();
+});
+
+function addDriver() {
+  const inp  = document.getElementById('newDriverName');
+  const name = inp.value.trim();
+  if (!name) { toast('名前を入力してください', 'err'); return; }
+  if (state.drivers.includes(name)) { toast('既に登録されています', 'err'); return; }
+  if (state.drivers.length >= 80)   { toast('80名の上限に達しています', 'err'); return; }
+  state.drivers.push(name);
+  saveState();
+  inp.value = '';
+  renderDriverSelect();
+  renderManageTab();
+  toast(`「${name}」を追加しました`);
+}
+
+function removeDriver(name) {
+  if (!confirm(`「${name}」を名簿から削除しますか？\n（入力データは保持されます）`)) return;
+  state.drivers = state.drivers.filter(d => d !== name);
+  saveState();
+  renderDriverSelect();
+  renderManageTab();
+  toast(`「${name}」を削除しました`);
+}
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  if (!confirm('⚠️ 全ての入力データを削除しますか？\nこの操作は元に戻せません。')) return;
+  state.entries = [];
+  saveState();
+  updateResult();
+  toast('全データを削除しました');
+});
+
+// ================================================================
+// Init
+// ================================================================
+function init() {
+  loadState();
+  loadApiKey();
+
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2,'0');
+  const d = String(today.getDate()).padStart(2,'0');
+  const todayStr = `${y}-${m}-${d}`;
+
+  document.getElementById('dateInput').value = todayStr;
+  state.currentDate = todayStr;
+
+  document.getElementById('summaryMonth').value = `${y}-${m}`;
+
+  // Auto holiday if Sunday
+  if (today.getDay() === 0) setDayType('holiday');
+
+  renderDriverSelect();
+  renderDestList();
+  updateResult();
+}
+
+init();
+</script>
+</body>
+</html>
