@@ -401,7 +401,7 @@ function checkPw(){
   <div class="card">
     <div class="card-title">📦 配送先マスター</div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
-      組み込みの配送先はHTMLのMASTERオブジェクトを編集してください。出勤時間のみ鉛筆アイコンで上書き保存できます。<br>
+      組み込みの配送先は ✏️ ボタンで荷主・出勤時間・残業h・距離を上書き保存できます（↩ でリセット）。<br>
       ここから追加した配送先はlocalStorageに保存されます。
     </div>
 
@@ -409,7 +409,7 @@ function checkPw(){
     <div class="table-wrap" style="margin-bottom:16px">
       <table class="tbl" id="destAllTable">
         <thead><tr>
-          <th>届先</th><th>出勤時間</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th></th>
+          <th>届先</th><th>荷主</th><th>出勤時間</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th></th>
         </tr></thead>
         <tbody id="destAllBody"></tbody>
       </table>
@@ -422,6 +422,14 @@ function checkPw(){
         <div style="grid-column:1/-1">
           <label>配送先名</label>
           <input type="text" id="newDestName" placeholder="例: XX倉庫" maxlength="40">
+        </div>
+        <div>
+          <label>荷主</label>
+          <select id="newDestShipper">
+            <option value="">-</option>
+            <option value="TG">TG</option>
+            <option value="SK">SK</option>
+          </select>
         </div>
         <div>
           <label>出勤時間 (HH:MM)</label>
@@ -449,6 +457,43 @@ function checkPw(){
     <div class="card-title">💾 データ管理</div>
     <div class="warn-box">⚠️ 月次締め後はCSVエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
     <button class="btn btn-danger" id="clearAllBtn">🗑️ 全データ削除</button>
+  </div>
+</div>
+
+<!-- 配送先編集モーダル（MASTER配送先の上書き用） -->
+<div id="destModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:12px;padding:24px;width:min(380px,92vw);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:800;color:var(--blue-dark);margin-bottom:4px" id="destModalTitle">配送先編集</div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:16px" id="destModalName"></div>
+    <input type="hidden" id="destModalKey">
+    <div style="margin-bottom:10px">
+      <label>荷主</label>
+      <select id="destModalShipper" style="width:100%">
+        <option value="">-</option>
+        <option value="TG">TG</option>
+        <option value="SK">SK</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px">
+      <label>出勤時間 (HH:MM)</label>
+      <input type="text" id="destModalStart" placeholder="例: 05:30" maxlength="5">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>残業時間・平日 (h)</label>
+      <input type="text" id="destModalOtWd" inputmode="decimal" placeholder="例: 1.5">
+    </div>
+    <div style="margin-bottom:10px">
+      <label>残業時間・日祝 (h)</label>
+      <input type="text" id="destModalOtHol" inputmode="decimal" placeholder="例: 4.0">
+    </div>
+    <div style="margin-bottom:16px">
+      <label>距離 (km)</label>
+      <input type="text" id="destModalKm" inputmode="decimal" placeholder="例: 120">
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-gray" onclick="closeDestModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveDestModal()">保存</button>
+    </div>
   </div>
 </div>
 
@@ -593,7 +638,7 @@ let state = {
   driverDetails: {}, // {[name]: {displayName:'', alias1:'', alias2:'', alias3:''}}
   entries: [],
   customDests: [],
-  destCustom: {}, // {[destName]: {startTime:''}} MASTER配送先の出勤時間上書き
+  destCustom: {}, // {[destName]: {startTime:'', shipper:'', km, ot_normal, ot_holiday}} MASTER配送先の上書き
   currentDriver: '',
   currentDate: '',
   currentDayType: 'weekday'
@@ -606,14 +651,17 @@ function getAllDests() {
   return [...MASTER.destinations, ...added];
 }
 function getKm(dest) {
+  if (dest in state.destCustom && state.destCustom[dest].km != null) return state.destCustom[dest].km;
   if (dest in MASTER.km_normal) return MASTER.km_normal[dest];
   return state.customDests.find(c => c.name === dest)?.km ?? 0;
 }
 function getOtNormal(dest) {
+  if (dest in state.destCustom && state.destCustom[dest].ot_normal != null) return state.destCustom[dest].ot_normal;
   if (dest in MASTER.ot_normal) return MASTER.ot_normal[dest];
   return state.customDests.find(c => c.name === dest)?.ot_normal ?? 0;
 }
 function getOtHoliday(dest) {
+  if (dest in state.destCustom && state.destCustom[dest].ot_holiday != null) return state.destCustom[dest].ot_holiday;
   if (dest in MASTER.ot_holiday) return MASTER.ot_holiday[dest];
   return state.customDests.find(c => c.name === dest)?.ot_holiday ?? 0;
 }
@@ -624,6 +672,10 @@ function isCustomDest(dest) {
 function getStartTime(dest) {
   if (dest in state.destCustom) return state.destCustom[dest].startTime || '';
   return state.customDests.find(c => c.name === dest)?.startTime || '';
+}
+function getShipper(dest) {
+  if (dest in state.destCustom) return state.destCustom[dest].shipper || '';
+  return state.customDests.find(c => c.name === dest)?.shipper || '';
 }
 let ocrResults = [];
 let ocrConfig  = { driver: '', date: '', dayType: 'weekday' };
@@ -1278,37 +1330,46 @@ function renderManageTab() {
   document.getElementById('destAllBody').innerHTML =
     getAllDests().map(d => {
       const custom = isCustomDest(d);
-      const startVal = getStartTime(d);
+      const startVal  = getStartTime(d);
+      const shipVal   = getShipper(d);
+      const shipSel   = (v) => ['','TG','SK'].map(opt =>
+        `<option value="${opt}"${opt===v?' selected':''}>${opt||'-'}</option>`).join('');
+      const inpStyle  = 'padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px';
       if (custom) {
         // カスタム配送先: 全項目編集可（インライン）
         return `<tr style="background:#f0fff4">
           <td style="font-weight:700">${esc(d)}</td>
+          <td><select style="${inpStyle};width:60px" onchange="updateCustomDestField('${esc(d)}','shipper',this.value)">${shipSel(shipVal)}</select></td>
           <td><input type="text" value="${esc(startVal)}" placeholder="HH:MM"
-            style="width:72px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px"
+            style="width:72px;${inpStyle}"
             onchange="updateCustomDestField('${esc(d)}','startTime',this.value)"></td>
-          <td class="r">${getOtNormal(d)} h</td>
-          <td class="r">${getOtHoliday(d)} h</td>
-          <td class="r">${getKm(d)} km</td>
+          <td class="r"><input type="text" value="${getOtNormal(d)}" inputmode="decimal"
+            style="width:56px;text-align:right;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','ot_normal',parseFloat(this.value)||0)"></td>
+          <td class="r"><input type="text" value="${getOtHoliday(d)}" inputmode="decimal"
+            style="width:56px;text-align:right;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','ot_holiday',parseFloat(this.value)||0)"></td>
+          <td class="r"><input type="text" value="${getKm(d)}" inputmode="decimal"
+            style="width:56px;text-align:right;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','km',parseFloat(this.value)||0)"></td>
           <td style="text-align:center">
             <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="removeCustomDest('${esc(d)}')">削除</button>
           </td>
         </tr>`;
       } else {
-        // MASTER配送先: 出勤時間のみ編集可
+        // MASTER配送先: 全項目編集可（✏️ボタンでモーダル）
+        const hasOverride = d in state.destCustom && Object.keys(state.destCustom[d]).some(k => state.destCustom[d][k] !== '' && state.destCustom[d][k] != null);
         return `<tr>
           <td style="font-weight:700">${esc(d)}</td>
-          <td>
-            <span id="destStart_disp_${esc(d)}" style="font-size:12px;cursor:pointer;color:${startVal ? 'var(--text-dark)' : 'var(--text-muted)'}"
-              onclick="startInlineEditDestStart('${esc(d)}')">${startVal || '──'} ✏️</span>
-            <input type="text" id="destStart_inp_${esc(d)}" value="${esc(startVal)}" placeholder="HH:MM"
-              style="display:none;width:72px;padding:3px 6px;border:1px solid var(--blue-light);border-radius:4px;font-size:12px"
-              onblur="commitInlineDestStart('${esc(d)}')"
-              onkeydown="if(event.key==='Enter')this.blur()">
+          <td style="font-size:12px;color:${shipVal?'var(--text-dark)':'var(--text-muted)'}">${shipVal||'─'}</td>
+          <td style="font-size:12px;color:${startVal?'var(--text-dark)':'var(--text-muted)'}">${startVal||'─'}</td>
+          <td class="r" style="font-size:12px">${getOtNormal(d)} h</td>
+          <td class="r" style="font-size:12px">${getOtHoliday(d)} h</td>
+          <td class="r" style="font-size:12px">${getKm(d)} km</td>
+          <td style="text-align:center;white-space:nowrap">
+            <button class="btn btn-gray btn-sm" style="padding:3px 8px" onclick="openDestModal('${esc(d)}')">✏️</button>
+            ${hasOverride ? `<button class="btn btn-danger btn-sm" style="padding:3px 8px;margin-left:2px" onclick="clearDestCustom('${esc(d)}')">↩</button>` : ''}
           </td>
-          <td class="r">${getOtNormal(d)} h</td>
-          <td class="r">${getOtHoliday(d)} h</td>
-          <td class="r">${getKm(d)} km</td>
-          <td style="text-align:center"><span style="font-size:10px;color:var(--text-muted)">組込</span></td>
         </tr>`;
       }
     }).join('');
@@ -1320,24 +1381,26 @@ document.getElementById('newDestName').addEventListener('keydown', e => {
 });
 
 function addCustomDest() {
-  const name   = document.getElementById('newDestName').value.trim();
-  const start  = document.getElementById('newDestStart').value.trim();
-  const km     = parseFloat(document.getElementById('newDestKm').value) || 0;
-  const otWd   = parseFloat(document.getElementById('newDestOtWd').value) || 0;
-  const otHol  = parseFloat(document.getElementById('newDestOtHol').value) || 0;
+  const name    = document.getElementById('newDestName').value.trim();
+  const shipper = document.getElementById('newDestShipper').value;
+  const start   = document.getElementById('newDestStart').value.trim();
+  const km      = parseFloat(document.getElementById('newDestKm').value) || 0;
+  const otWd    = parseFloat(document.getElementById('newDestOtWd').value) || 0;
+  const otHol   = parseFloat(document.getElementById('newDestOtHol').value) || 0;
 
   if (!name) { toast('配送先名を入力してください', 'err'); return; }
   if (getAllDests().includes(name)) { toast('同じ名前の配送先が既に存在します', 'err'); return; }
   if (km <= 0) { toast('km は 0 より大きい値を入力してください', 'err'); return; }
 
-  state.customDests.push({ name, startTime: start, km, ot_normal: otWd, ot_holiday: otHol });
+  state.customDests.push({ name, shipper, startTime: start, km, ot_normal: otWd, ot_holiday: otHol });
   saveState();
 
-  document.getElementById('newDestName').value  = '';
-  document.getElementById('newDestStart').value = '';
-  document.getElementById('newDestKm').value    = '';
-  document.getElementById('newDestOtWd').value  = '';
-  document.getElementById('newDestOtHol').value = '';
+  document.getElementById('newDestName').value    = '';
+  document.getElementById('newDestShipper').value = '';
+  document.getElementById('newDestStart').value   = '';
+  document.getElementById('newDestKm').value      = '';
+  document.getElementById('newDestOtWd').value    = '';
+  document.getElementById('newDestOtHol').value   = '';
 
   renderManageTab();
   toast(`「${name}」を追加しました`);
@@ -1355,6 +1418,58 @@ function updateCustomDestField(name, field, value) {
   const c = state.customDests.find(c => c.name === name);
   if (c) { c[field] = value; saveState(); }
 }
+
+// MASTER配送先編集モーダル
+function openDestModal(dest) {
+  document.getElementById('destModalKey').value     = dest;
+  document.getElementById('destModalTitle').textContent = '配送先編集';
+  document.getElementById('destModalName').textContent  = dest;
+  const ov = state.destCustom[dest] || {};
+  document.getElementById('destModalShipper').value = ov.shipper  != null ? ov.shipper  : getShipper(dest);
+  document.getElementById('destModalStart').value   = ov.startTime != null ? ov.startTime : getStartTime(dest);
+  document.getElementById('destModalOtWd').value    = ov.ot_normal  != null ? ov.ot_normal  : MASTER.ot_normal[dest] ?? '';
+  document.getElementById('destModalOtHol').value   = ov.ot_holiday != null ? ov.ot_holiday : MASTER.ot_holiday[dest] ?? '';
+  document.getElementById('destModalKm').value      = ov.km != null ? ov.km : MASTER.km_normal[dest] ?? '';
+  document.getElementById('destModal').style.display = 'flex';
+}
+
+function closeDestModal() {
+  document.getElementById('destModal').style.display = 'none';
+}
+
+function saveDestModal() {
+  const dest    = document.getElementById('destModalKey').value;
+  const shipper = document.getElementById('destModalShipper').value;
+  const start   = document.getElementById('destModalStart').value.trim();
+  const otWd    = document.getElementById('destModalOtWd').value.trim();
+  const otHol   = document.getElementById('destModalOtHol').value.trim();
+  const km      = document.getElementById('destModalKm').value.trim();
+
+  if (!state.destCustom[dest]) state.destCustom[dest] = {};
+  state.destCustom[dest].shipper    = shipper;
+  state.destCustom[dest].startTime  = start;
+  state.destCustom[dest].ot_normal  = otWd  !== '' ? parseFloat(otWd)  : null;
+  state.destCustom[dest].ot_holiday = otHol !== '' ? parseFloat(otHol) : null;
+  state.destCustom[dest].km         = km    !== '' ? parseFloat(km)    : null;
+
+  saveState();
+  closeDestModal();
+  renderManageTab();
+  toast(`「${dest}」を更新しました`);
+}
+
+function clearDestCustom(dest) {
+  if (!confirm(`「${dest}」の上書き設定をリセットしてMASTERの値に戻しますか？`)) return;
+  delete state.destCustom[dest];
+  saveState();
+  renderManageTab();
+  toast(`「${dest}」をリセットしました`);
+}
+
+// モーダル外クリックで閉じる（配送先モーダル）
+document.getElementById('destModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDestModal();
+});
 
 // MASTER配送先の出勤時間インライン編集
 function startInlineEditDestStart(dest) {
