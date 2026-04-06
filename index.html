@@ -22,7 +22,7 @@
   cursor:pointer;transition:opacity .2s}
 #pw-btn:hover{opacity:.9}
 #pw-error{color:#e53e3e;font-size:13px;margin-top:10px;min-height:18px}
-</style>
+
 :root {
   --blue-dark:#1a365d; --blue-mid:#2b6cb0; --blue-light:#3182ce;
   --blue-pale:#ebf8ff; --text-dark:#1a202c; --text-mid:#2d3748;
@@ -78,20 +78,24 @@ select:focus,input:focus{border-color:var(--blue-light);
 
 /* Dest grid */
 .dest-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-@media(max-width:600px){.dest-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.dest-grid{grid-template-columns:repeat(3,1fr);gap:6px}}
+@media(max-width:400px){.dest-grid{grid-template-columns:repeat(2,1fr);gap:6px}}
 .dest-card{background:white;border:1.5px solid var(--border);border-radius:10px;
-  padding:10px 8px;text-align:center;transition:all .15s}
-.dest-card.selected{border-color:var(--blue-light);background:var(--blue-pale)}
+  padding:10px 8px;text-align:center;transition:all .15s;-webkit-user-select:none;user-select:none}
+.dest-card.selected{border-color:var(--blue-light);background:var(--blue-pale);
+  box-shadow:0 0 0 2px rgba(49,130,206,.15)}
 .dest-name{font-size:12px;font-weight:700;color:var(--text-mid);
-  margin-bottom:2px;line-height:1.3}
+  margin-bottom:2px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .dest-km{font-size:11px;color:var(--text-muted);margin-bottom:8px}
 .count-ctrl{display:flex;align-items:center;justify-content:center;gap:6px}
-.count-btn{width:28px;height:28px;border:1.5px solid var(--border);border-radius:50%;
+.count-btn{width:32px;height:32px;border:1.5px solid var(--border);border-radius:50%;
   background:white;font-size:18px;line-height:1;cursor:pointer;color:var(--blue-mid);
   font-weight:700;display:flex;align-items:center;justify-content:center;
-  transition:all .15s;padding:0}
-.count-btn:active{transform:scale(.9)}
+  transition:all .15s;padding:0;-webkit-tap-highlight-color:transparent}
+.count-btn:active{transform:scale(.9);background:var(--blue-pale)}
 .count-btn.minus{color:#c53030;border-color:#fc8181}
+.count-btn.minus:active{background:#fff5f5}
 .count-val{font-size:16px;font-weight:800;min-width:20px}
 
 /* Result cards */
@@ -212,21 +216,49 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* Larger tap targets on mobile */
 @media(max-width:480px){
-  .count-btn{width:36px;height:36px;font-size:20px}
+  .count-btn{width:38px;height:38px;font-size:20px}
   .count-val{font-size:18px;min-width:24px}
   .btn{min-height:44px}
-  .tab-btn{padding:7px 9px;font-size:11px}
+  .tab-btn{padding:8px 10px;font-size:12px}
   .dest-name{font-size:11px}
   .result-grid{grid-template-columns:repeat(2,1fr)}
   .ctrl-grid{grid-template-columns:1fr}
   select,input[type=date],input[type=text],input[type=month],input[type=password]{
     font-size:16px /* prevent iOS zoom */
   }
+  .card{padding:12px}
+  .tab-panel{padding:10px}
+  .tbl th,.tbl td{padding:6px 8px;font-size:11px}
+  .upload-area{padding:20px 14px}
+  .upload-btns{grid-template-columns:1fr 1fr;gap:8px}
+  .upload-btn{padding:14px 8px}
+  .ocr-item{padding:10px;flex-wrap:wrap}
 }
 @media(max-width:360px){
-  .tab-btn{padding:6px 7px;font-size:10px}
-  .app-title{font-size:14px}
+  .tab-btn{padding:7px 8px;font-size:11px}
+  .app-title{font-size:15px}
+  .dest-grid{gap:5px}
+  .dest-card{padding:8px 6px}
+  .count-btn{width:34px;height:34px}
 }
+
+/* 検索バー改善 */
+.dest-search-wrap{position:relative;margin-bottom:12px}
+.dest-search-wrap input{padding-left:36px;padding-right:36px}
+.dest-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  color:var(--text-muted);font-size:14px;pointer-events:none}
+.dest-search-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;
+  padding:4px 8px;display:none}
+.dest-search-wrap input:not(:placeholder-shown) ~ .dest-search-clear{display:block}
+
+/* 選択済み配送先サマリー */
+.selected-summary{background:var(--blue-pale);border:1px solid #bee3f8;border-radius:8px;
+  padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--blue-dark);
+  display:none;flex-wrap:wrap;gap:4px;align-items:center}
+.selected-summary.has-items{display:flex}
+.selected-tag{background:white;border:1px solid #bee3f8;border-radius:12px;
+  padding:2px 8px;font-size:11px;font-weight:600;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -297,8 +329,17 @@ function checkPw(){
 
   <div class="result-grid" id="resultCards"></div>
 
+  <div id="selectedSummary" class="selected-summary">
+    <span style="font-weight:700">選択中:</span>
+    <span id="selectedTags"></span>
+  </div>
+
   <div class="card">
-    <input type="text" id="destSearch" placeholder="🔍 配送先を検索..." style="margin-bottom:10px">
+    <div class="dest-search-wrap">
+      <span class="dest-search-icon">🔍</span>
+      <input type="text" id="destSearch" placeholder="配送先を検索...">
+      <button class="dest-search-clear" id="destSearchClear" type="button">&times;</button>
+    </div>
     <div id="destGrid" class="dest-grid"></div>
   </div>
 
@@ -801,6 +842,12 @@ document.getElementById('destSearch').addEventListener('input', function() {
   destFilter = this.value.toLowerCase();
   renderDestList();
 });
+document.getElementById('destSearchClear').addEventListener('click', function() {
+  document.getElementById('destSearch').value = '';
+  destFilter = '';
+  renderDestList();
+  document.getElementById('destSearch').focus();
+});
 
 function renderDestList() {
   const grid = document.getElementById('destGrid');
@@ -939,6 +986,19 @@ function updateResult() {
       <div class="result-value">${esc(c.val)}</div>
     </div>`
   ).join('');
+
+  // 選択中の配送先サマリー表示
+  const sumEl = document.getElementById('selectedSummary');
+  const tagsEl = document.getElementById('selectedTags');
+  if (day.length > 0) {
+    sumEl.classList.add('has-items');
+    tagsEl.innerHTML = day.map(e =>
+      `<span class="selected-tag">${esc(e.dest)} ×${e.count}</span>`
+    ).join('');
+  } else {
+    sumEl.classList.remove('has-items');
+    tagsEl.innerHTML = '';
+  }
 
   const todayCard = document.getElementById('todayCard');
   const todayTbl  = document.getElementById('todayTable');
@@ -1133,6 +1193,11 @@ async function callOCR(base64, mimeType) {
   const apiKey = document.getElementById('apiKeyInput').value.trim();
   if (!apiKey) throw new Error('APIキーを入力してください');
 
+  // 全配送先リストを送信（fuzzy matchのため）
+  const allDests = getAllDests();
+  const destList = allDests.join('、');
+  const driverList = state.drivers.join('、');
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -1142,21 +1207,22 @@ async function callOCR(base64, mimeType) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-6',
-      max_tokens: 1000,
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
       messages: [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
           { type: 'text', text:
-            `この画像は運送会社のシフト表または手書きシートです。\n` +
+            `この画像は運送会社のシフト表・配車表・手書きシートです。\n` +
             `画像から以下の情報を読み取ってください：\n` +
-            `1. ドライバー名（記載があれば）\n` +
+            `1. ドライバー名（記載があれば。候補: ${driverList}）\n` +
             `2. 日付（記載があれば YYYY-MM-DD 形式で。年の記載がなければ今年 ${new Date().getFullYear()} 年とする）\n` +
-            `3. 配送先名と回数（数字が書いてある配送先）\n\n` +
-            `回答は以下のJSON形式のみで返してください（説明文なし）：\n` +
-            `{"driver":"ドライバー名または空文字","date":"YYYY-MM-DDまたは空文字","entries":[{"dest":"配送先名","count":1}]}\n\n` +
-            `配送先の候補: ${MASTER.destinations.slice(0,30).join('、')} など`
+            `3. 各配送先と回数\n\n` +
+            `【重要】配送先名は必ず以下の候補リストから最も近い名前を選んでください：\n${destList}\n\n` +
+            `回答は以下のJSON形式のみで返してください（説明文・コードブロック記法なし、純粋なJSONのみ）：\n` +
+            `{"driver":"ドライバー名または空文字","date":"YYYY-MM-DDまたは空文字","entries":[{"dest":"配送先名","count":1}]}\n` +
+            `回数が読めない場合は1としてください。配送先が0件の場合はentriesを空配列にしてください。`
           }
         ]
       }]
@@ -1170,10 +1236,42 @@ async function callOCR(base64, mimeType) {
   return (await res.json()).content[0].text;
 }
 
+// ファジーマッチング: OCR結果の配送先名を既存マスターに照合
+function fuzzyMatchDest(ocrName) {
+  const allDests = getAllDests();
+  // 完全一致
+  if (allDests.includes(ocrName)) return ocrName;
+  // 空白・全角半角を正規化して比較
+  const norm = s => s.replace(/[\s　]+/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g, c =>
+    String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const normOcr = norm(ocrName);
+  const exact = allDests.find(d => norm(d) === normOcr);
+  if (exact) return exact;
+  // 部分一致（候補名がOCR名に含まれる or 逆）
+  const partial = allDests.find(d =>
+    normOcr.includes(norm(d)) || norm(d).includes(normOcr));
+  if (partial) return partial;
+  // 類似度スコアで最良候補
+  let best = null, bestScore = 0;
+  for (const d of allDests) {
+    const nd = norm(d);
+    let score = 0, j = 0;
+    for (let i = 0; i < normOcr.length && j < nd.length; i++) {
+      if (normOcr[i] === nd[j]) { score++; j++; }
+    }
+    const ratio = score / Math.max(normOcr.length, nd.length);
+    if (ratio > bestScore) { bestScore = ratio; best = d; }
+  }
+  return bestScore >= 0.5 ? best : null;
+}
+
 function parseOCRResult(text, imgDataUrl) {
   let parsed = null;
   try {
-    const clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    // JSON部分を抽出（コードブロック・前後テキスト対応）
+    let clean = text.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (jsonMatch) clean = jsonMatch[0];
     parsed = JSON.parse(clean);
   } catch {
     document.getElementById('ocrResultArea').innerHTML =
@@ -1183,7 +1281,12 @@ function parseOCRResult(text, imgDataUrl) {
     return;
   }
 
-  ocrResults = parsed.entries || [];
+  // ファジーマッチングで配送先名を正規化
+  const rawEntries = parsed.entries || [];
+  ocrResults = rawEntries.map(item => {
+    const matched = fuzzyMatchDest(item.dest);
+    return { dest: matched || item.dest, count: item.count || 1, origDest: item.dest, matched: !!matched };
+  });
 
   // OCR検出値をocrConfigにセット（ドライバー・日付）
   ocrConfig.driver  = parsed.driver || state.currentDriver || '';
@@ -1222,11 +1325,16 @@ function parseOCRResult(text, imgDataUrl) {
 
   const items = ocrResults.map((item, i) => {
     const km = getKm(item.dest);
-    const kmStr = km ? fmtKm(km * item.count) : '⚠️ 配送先不明';
-    return `<div class="ocr-item" id="ocri-${i}">
+    const isKnown = getAllDests().includes(item.dest);
+    const kmStr = isKnown ? fmtKm(km * item.count) : '⚠️ 配送先不明';
+    const matchInfo = item.origDest && item.origDest !== item.dest
+      ? `<div style="font-size:10px;color:#805ad5;margin-top:1px">OCR: ${esc(item.origDest)} → 自動補正</div>` : '';
+    const warnStyle = !isKnown ? 'border-color:#fc8181;background:#fff5f5' : '';
+    return `<div class="ocr-item" id="ocri-${i}" style="${warnStyle}">
       <div>
         <div class="ocr-item-name">${esc(item.dest)}</div>
         <div class="ocr-item-sub">${item.count}回 / ${kmStr}</div>
+        ${matchInfo}
       </div>
     </div>`;
   }).join('');
@@ -1288,9 +1396,14 @@ function importAllOCR() {
 }
 
 function doImportOCR(dest, count, driver, date, dayType, silent) {
+  // ファジーマッチング再試行
   if (!getAllDests().includes(dest)) {
-    if (!silent) toast(`「${dest}」はマスターにありません`, 'err');
-    return false;
+    const matched = fuzzyMatchDest(dest);
+    if (matched) { dest = matched; }
+    else {
+      if (!silent) toast(`「${dest}」はマスターにありません`, 'err');
+      return false;
+    }
   }
   state.entries = state.entries.filter(e =>
     !(e.driver === driver && e.date === date && e.dayType === dayType && e.dest === dest)
