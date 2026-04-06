@@ -242,6 +242,23 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .count-btn{width:34px;height:34px}
 }
 
+/* 偏りチャート */
+.fair-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.fair-name{width:70px;text-align:right;font-weight:700;color:var(--text-mid);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0}
+.fair-bar-wrap{flex:1;height:22px;background:#edf2f7;border-radius:4px;
+  position:relative;overflow:hidden}
+.fair-bar{height:100%;border-radius:4px;position:absolute;transition:width .3s}
+.fair-bar.pos{background:linear-gradient(90deg,#3182ce,#63b3ed);left:50%}
+.fair-bar.neg{background:linear-gradient(270deg,#fc8181,#e53e3e);right:50%}
+.fair-center{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#a0aec0;z-index:1}
+.fair-val{width:70px;font-size:11px;color:var(--text-muted);flex-shrink:0}
+.fair-legend{display:flex;justify-content:space-between;font-size:10px;
+  color:var(--text-muted);margin-bottom:8px;padding:0 78px}
+
+/* 日曜ボタン */
+.daytype-btn.sun{background:#fefcbf;border-color:#ecc94b;color:#975a16}
+
 /* 検索バー改善 */
 .dest-search-wrap{position:relative;margin-bottom:12px}
 .dest-search-wrap input{padding-left:36px;padding-right:36px}
@@ -322,7 +339,8 @@ function checkPw(){
       <label>日種別</label>
       <div class="daytype-row">
         <button class="daytype-btn wd" id="btnWeekday">平日</button>
-        <button class="daytype-btn" id="btnHoliday">日・祝</button>
+        <button class="daytype-btn" id="btnSunday">日曜</button>
+        <button class="daytype-btn" id="btnHoliday">祝日</button>
       </div>
     </div>
   </div>
@@ -357,33 +375,83 @@ function checkPw(){
 <!-- ===== 集計タブ ===== -->
 <div class="tab-panel" id="tab-summary">
   <div class="stat-grid" id="summaryStats"></div>
+
   <div class="card">
-    <div class="action-row">
+    <div class="action-row" style="flex-wrap:wrap">
       <button class="btn btn-primary" id="exportCsvBtn">⬇️ CSV エクスポート</button>
       <button class="btn btn-success" id="refreshSummaryBtn">🔄 更新</button>
     </div>
-    <div style="margin-bottom:12px">
-      <label>月でフィルタ（任意）</label>
-      <div class="ctrl-grid">
+    <div class="ctrl-grid" style="margin-bottom:12px">
+      <div>
+        <label>表示期間</label>
+        <select id="summaryViewMode">
+          <option value="month">月次</option>
+          <option value="year">年間</option>
+        </select>
+      </div>
+      <div>
+        <label id="summaryPeriodLabel">月を選択</label>
         <input type="month" id="summaryMonth">
-        <div></div>
+        <select id="summaryYear" style="display:none"></select>
       </div>
     </div>
+  </div>
+
+  <!-- ドライバー別 月次集計テーブル -->
+  <div class="card">
+    <div class="card-title">ドライバー別集計</div>
     <div class="table-wrap">
       <table class="tbl" id="summaryTable">
         <thead><tr>
           <th>ドライバー</th>
-          <th class="r">出勤日数</th>
-          <th class="r">総 km</th>
-          <th class="r">賃金（円）</th>
-          <th class="r">平日残業h</th>
-          <th class="r">日祝残業h</th>
+          <th class="r">出勤</th>
+          <th class="r">総km</th>
+          <th class="r">日平均km</th>
+          <th class="r">平日OT</th>
+          <th class="r">日曜OT</th>
+          <th class="r">祝日OT</th>
         </tr></thead>
         <tbody id="summaryBody"></tbody>
       </table>
     </div>
     <div id="summaryEmpty" class="empty" style="display:none">
       <div class="empty-icon">📋</div>データがありません
+    </div>
+  </div>
+
+  <!-- 偏り可視化 -->
+  <div class="card" id="fairnessCard" style="display:none">
+    <div class="card-title">距離の偏り（平均との差）</div>
+    <div id="fairnessChart"></div>
+  </div>
+
+  <!-- TG/SK別集計 -->
+  <div class="card" id="shipperCard" style="display:none">
+    <div class="card-title">荷主別集計（TG / SK）</div>
+    <div class="table-wrap">
+      <table class="tbl" id="shipperTable">
+        <thead><tr>
+          <th>ドライバー</th>
+          <th class="r">TG km</th>
+          <th class="r">TG OT</th>
+          <th class="r">SK km</th>
+          <th class="r">SK OT</th>
+          <th class="r">他 km</th>
+          <th class="r">他 OT</th>
+        </tr></thead>
+        <tbody id="shipperBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 年間月別推移（年間モード時表示） -->
+  <div class="card" id="yearlyCard" style="display:none">
+    <div class="card-title">月別推移</div>
+    <div class="table-wrap">
+      <table class="tbl" id="yearlyTable">
+        <thead id="yearlyHead"></thead>
+        <tbody id="yearlyBody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -823,16 +891,24 @@ document.getElementById('dateInput').addEventListener('change', () => {
 });
 
 document.getElementById('btnWeekday').addEventListener('click', () => setDayType('weekday'));
+document.getElementById('btnSunday').addEventListener('click', () => setDayType('sunday'));
 document.getElementById('btnHoliday').addEventListener('click', () => setDayType('holiday'));
 
 function setDayType(type) {
   state.currentDayType = type;
   document.getElementById('btnWeekday').className =
     'daytype-btn' + (type === 'weekday' ? ' wd' : '');
+  document.getElementById('btnSunday').className =
+    'daytype-btn' + (type === 'sunday' ? ' sun' : '');
   document.getElementById('btnHoliday').className =
     'daytype-btn' + (type === 'holiday' ? ' hol' : '');
   renderDestList();
   updateResult();
+}
+
+// 日曜・祝日はどちらもot_holiday料率を使用
+function getOtRate(dest, dayType) {
+  return dayType === 'weekday' ? getOtNormal(dest) : getOtHoliday(dest);
 }
 
 // ================================================================
@@ -932,7 +1008,7 @@ function changeCount(dest, delta) {
 
   if (next > 0) {
     const km  = getKm(dest) * next;
-    const ot  = (state.currentDayType === 'weekday' ? getOtNormal(dest) : getOtHoliday(dest)) * next;
+    const ot  = getOtRate(dest, state.currentDayType) * next;
     state.entries.push({
       driver: state.currentDriver, date: state.currentDate,
       dayType: state.currentDayType, dest, count: next, km, ot
@@ -946,7 +1022,8 @@ function changeCount(dest, delta) {
 
 document.getElementById('clearDayBtn').addEventListener('click', () => {
   if (!state.currentDriver || !state.currentDate) return;
-  if (!confirm(`${state.currentDriver}の${state.currentDate}（${state.currentDayType === 'weekday' ? '平日' : '日祝'}）のデータをリセットしますか？`)) return;
+  const dtLabel = {weekday:'平日',sunday:'日曜',holiday:'祝日'}[state.currentDayType];
+  if (!confirm(`${state.currentDriver}の${state.currentDate}（${dtLabel}）のデータをリセットしますか？`)) return;
   state.entries = state.entries.filter(e =>
     !(e.driver === state.currentDriver && e.date === state.currentDate &&
       e.dayType === state.currentDayType)
@@ -1025,32 +1102,81 @@ function updateResult() {
 // ================================================================
 // Summary tab
 // ================================================================
-function updateSummary() {
-  const mf = document.getElementById('summaryMonth').value;
-  const entries = mf
-    ? state.entries.filter(e => e.date.startsWith(mf))
-    : state.entries;
 
+// 表示モード切替
+document.getElementById('summaryViewMode').addEventListener('change', function() {
+  const isYear = this.value === 'year';
+  document.getElementById('summaryMonth').style.display = isYear ? 'none' : '';
+  document.getElementById('summaryYear').style.display  = isYear ? '' : 'none';
+  document.getElementById('summaryPeriodLabel').textContent = isYear ? '年を選択' : '月を選択';
+  document.getElementById('yearlyCard').style.display = isYear ? '' : 'none';
+  updateSummary();
+});
+
+// 年セレクト初期化
+function initYearSelect() {
+  const years = new Set(state.entries.map(e => e.date.slice(0,4)));
+  years.add(String(new Date().getFullYear()));
+  const sel = document.getElementById('summaryYear');
+  sel.innerHTML = [...years].sort().reverse().map(y =>
+    `<option value="${y}">${y}年</option>`).join('');
+}
+
+document.getElementById('summaryYear').addEventListener('change', updateSummary);
+
+function getFilteredEntries() {
+  const mode = document.getElementById('summaryViewMode').value;
+  if (mode === 'year') {
+    const y = document.getElementById('summaryYear').value;
+    return y ? state.entries.filter(e => e.date.startsWith(y)) : state.entries;
+  }
+  const mf = document.getElementById('summaryMonth').value;
+  return mf ? state.entries.filter(e => e.date.startsWith(mf)) : state.entries;
+}
+
+function updateSummary() {
+  initYearSelect();
+  const entries = getFilteredEntries();
+
+  // ドライバー別集計 (3区分OT)
   const map = {};
   entries.forEach(e => {
-    if (!map[e.driver]) map[e.driver] = { km:0, otWd:0, otHol:0, dates:new Set() };
-    map[e.driver].km += e.km;
-    if (e.dayType === 'weekday') map[e.driver].otWd  += e.ot;
-    else                         map[e.driver].otHol += e.ot;
-    map[e.driver].dates.add(e.date);
+    if (!map[e.driver]) map[e.driver] = {
+      km:0, otWd:0, otSun:0, otHol:0, dates:new Set(),
+      tgKm:0, tgOt:0, skKm:0, skOt:0, otherKm:0, otherOt:0
+    };
+    const d = map[e.driver];
+    d.km += e.km;
+    d.dates.add(e.date);
+
+    // 日種別ごとのOT
+    if (e.dayType === 'weekday')     d.otWd  += e.ot;
+    else if (e.dayType === 'sunday') d.otSun += e.ot;
+    else                             d.otHol += e.ot;
+
+    // 荷主別集計
+    const shipper = getShipper(e.dest);
+    if (shipper === 'TG')      { d.tgKm += e.km; d.tgOt += e.ot; }
+    else if (shipper === 'SK') { d.skKm += e.km; d.skOt += e.ot; }
+    else                       { d.otherKm += e.km; d.otherOt += e.ot; }
   });
 
   const rows = Object.entries(map)
     .map(([drv, d]) => ({
-      drv, km: d.km, otWd: d.otWd, otHol: d.otHol,
-      days: d.dates.size, wage: d.km * RATE_PER_KM
+      drv, km: d.km, otWd: d.otWd, otSun: d.otSun, otHol: d.otHol,
+      days: d.dates.size, wage: d.km * RATE_PER_KM,
+      avgKm: d.dates.size > 0 ? d.km / d.dates.size : 0,
+      tgKm: d.tgKm, tgOt: d.tgOt, skKm: d.skKm, skOt: d.skOt,
+      otherKm: d.otherKm, otherOt: d.otherOt
     }))
     .sort((a, b) => b.km - a.km);
 
   const totKm   = rows.reduce((s,r)=>s+r.km, 0);
   const totWage = rows.reduce((s,r)=>s+r.wage, 0);
-  const totOt   = rows.reduce((s,r)=>s+r.otWd+r.otHol, 0);
+  const totOt   = rows.reduce((s,r)=>s+r.otWd+r.otSun+r.otHol, 0);
+  const avgKmAll = rows.length > 0 ? totKm / rows.length : 0;
 
+  // 全体統計カード
   document.getElementById('summaryStats').innerHTML = `
     <div class="stat-card"><div class="stat-icon">📍</div>
       <div class="stat-val">${Math.round(totKm).toLocaleString()}</div>
@@ -1065,53 +1191,190 @@ function updateSummary() {
       <div class="stat-val">${rows.length}</div>
       <div class="stat-lbl">実働ドライバー</div></div>`;
 
+  // ドライバー別テーブル
   const empty = document.getElementById('summaryEmpty');
   const tbody = document.getElementById('summaryBody');
 
   if (rows.length === 0) {
     tbody.innerHTML = '';
     empty.style.display = '';
+    document.getElementById('fairnessCard').style.display = 'none';
+    document.getElementById('shipperCard').style.display = 'none';
     return;
   }
   empty.style.display = 'none';
 
-  const rankCls = ['r1','r2','r3'];
   tbody.innerHTML = rows.map((r, i) => {
+    const rankCls = ['r1','r2','r3'];
     const badge = i < 3
       ? `<span class="rank ${rankCls[i]}">${['🥇','🥈','🥉'][i]}</span>`
       : `<span class="rank rn">${i+1}</span>`;
     return `<tr>
       <td>${badge}${esc(r.drv)}</td>
       <td class="r">${r.days}日</td>
-      <td class="r">${Math.round(r.km).toLocaleString()} km</td>
-      <td class="r">${fmtWage(r.wage)}</td>
-      <td class="r">${fmtOt(r.otWd)}</td>
-      <td class="r">${fmtOt(r.otHol)}</td>
+      <td class="r">${Math.round(r.km).toLocaleString()}</td>
+      <td class="r">${Math.round(r.avgKm).toLocaleString()}</td>
+      <td class="r">${r.otWd.toFixed(1)}</td>
+      <td class="r">${r.otSun.toFixed(1)}</td>
+      <td class="r">${r.otHol.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  // 偏り可視化
+  renderFairnessChart(rows, avgKmAll);
+
+  // TG/SK別テーブル
+  renderShipperTable(rows);
+
+  // 年間モード: 月別推移
+  if (document.getElementById('summaryViewMode').value === 'year') {
+    renderYearlyTable(entries);
+  }
+}
+
+function renderFairnessChart(rows, avgKm) {
+  const card = document.getElementById('fairnessCard');
+  if (rows.length < 2) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const maxDev = Math.max(...rows.map(r => Math.abs(r.km - avgKm)), 1);
+
+  const legend = `<div class="fair-legend">
+    <span>← 平均以下</span><span>平均: ${Math.round(avgKm).toLocaleString()} km</span><span>平均以上 →</span>
+  </div>`;
+
+  const bars = rows.map(r => {
+    const dev = r.km - avgKm;
+    const pct = Math.min(Math.abs(dev) / maxDev * 50, 50);
+    const cls = dev >= 0 ? 'pos' : 'neg';
+    const style = dev >= 0
+      ? `left:50%;width:${pct}%`
+      : `right:50%;width:${pct}%`;
+    const color = Math.abs(dev) / avgKm > 0.2
+      ? (dev > 0 ? '#e53e3e' : '#dd6b20') : '';
+    return `<div class="fair-row">
+      <div class="fair-name">${esc(r.drv)}</div>
+      <div class="fair-bar-wrap">
+        <div class="fair-center"></div>
+        <div class="fair-bar ${cls}" style="${style}${color ? ';background:'+color : ''}"></div>
+      </div>
+      <div class="fair-val">${dev >= 0 ? '+' : ''}${Math.round(dev).toLocaleString()} km</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('fairnessChart').innerHTML = legend + bars;
+}
+
+function renderShipperTable(rows) {
+  const card = document.getElementById('shipperCard');
+  const hasTgSk = rows.some(r => r.tgKm > 0 || r.skKm > 0);
+  if (!hasTgSk) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  document.getElementById('shipperBody').innerHTML = rows.map(r =>
+    `<tr>
+      <td style="font-weight:700">${esc(r.drv)}</td>
+      <td class="r">${Math.round(r.tgKm).toLocaleString()}</td>
+      <td class="r">${r.tgOt.toFixed(1)}</td>
+      <td class="r">${Math.round(r.skKm).toLocaleString()}</td>
+      <td class="r">${r.skOt.toFixed(1)}</td>
+      <td class="r">${Math.round(r.otherKm).toLocaleString()}</td>
+      <td class="r">${r.otherOt.toFixed(1)}</td>
+    </tr>`
+  ).join('');
+}
+
+function renderYearlyTable(entries) {
+  const card = document.getElementById('yearlyCard');
+  card.style.display = '';
+
+  // ドライバー × 月ごとの km 集計
+  const drvMonths = {};
+  entries.forEach(e => {
+    const m = e.date.slice(0,7); // YYYY-MM
+    if (!drvMonths[e.driver]) drvMonths[e.driver] = {};
+    if (!drvMonths[e.driver][m]) drvMonths[e.driver][m] = 0;
+    drvMonths[e.driver][m] += e.km;
+  });
+
+  const months = [...new Set(entries.map(e => e.date.slice(0,7)))].sort();
+  const monthLabels = months.map(m => m.slice(5) + '月');
+
+  document.getElementById('yearlyHead').innerHTML =
+    `<tr><th>ドライバー</th>${monthLabels.map(l => `<th class="r">${l}</th>`).join('')}<th class="r">年計</th></tr>`;
+
+  const drvNames = Object.keys(drvMonths).sort((a,b) => {
+    const ta = months.reduce((s,m) => s + (drvMonths[a][m]||0), 0);
+    const tb = months.reduce((s,m) => s + (drvMonths[b][m]||0), 0);
+    return tb - ta;
+  });
+
+  document.getElementById('yearlyBody').innerHTML = drvNames.map(drv => {
+    const total = months.reduce((s,m) => s + (drvMonths[drv][m]||0), 0);
+    return `<tr>
+      <td style="font-weight:700">${esc(drv)}</td>
+      ${months.map(m => {
+        const v = drvMonths[drv][m] || 0;
+        return `<td class="r">${v ? Math.round(v).toLocaleString() : '-'}</td>`;
+      }).join('')}
+      <td class="r" style="font-weight:700">${Math.round(total).toLocaleString()}</td>
     </tr>`;
   }).join('');
 }
 
 document.getElementById('refreshSummaryBtn').addEventListener('click', updateSummary);
-
 document.getElementById('summaryMonth').addEventListener('input', updateSummary);
 
 document.getElementById('exportCsvBtn').addEventListener('click', () => {
   if (state.entries.length === 0) { toast('エクスポートするデータがありません', 'err'); return; }
-  const header = ['ドライバー','日付','日種別','配送先','回数','km','賃金','残業h'];
-  const rows   = state.entries.map(e => [
+
+  const mode = document.getElementById('summaryViewMode').value;
+  const entries = getFilteredEntries();
+
+  // 明細CSV
+  const header = ['ドライバー','日付','日種別','配送先','荷主','回数','km','賃金','残業h'];
+  const csvRows = entries.map(e => [
     e.driver, e.date,
-    e.dayType === 'weekday' ? '平日' : '日祝',
-    e.dest, e.count, e.km,
+    {weekday:'平日',sunday:'日曜',holiday:'祝日'}[e.dayType] || e.dayType,
+    e.dest, getShipper(e.dest), e.count, e.km,
     Math.round(e.km * RATE_PER_KM), e.ot
   ]);
-  const csv = '\uFEFF' + [header, ...rows]
+
+  // 集計サマリーも追加
+  csvRows.push([]);
+  csvRows.push(['--- ドライバー別集計 ---']);
+  csvRows.push(['ドライバー','出勤日数','総km','日平均km','平日OT','日曜OT','祝日OT','TG km','TG OT','SK km','SK OT']);
+
+  const map = {};
+  entries.forEach(e => {
+    if (!map[e.driver]) map[e.driver] = {km:0,otWd:0,otSun:0,otHol:0,dates:new Set(),tgKm:0,tgOt:0,skKm:0,skOt:0};
+    const d = map[e.driver];
+    d.km += e.km; d.dates.add(e.date);
+    if (e.dayType==='weekday') d.otWd+=e.ot;
+    else if (e.dayType==='sunday') d.otSun+=e.ot;
+    else d.otHol+=e.ot;
+    const sh = getShipper(e.dest);
+    if (sh==='TG'){d.tgKm+=e.km;d.tgOt+=e.ot;}
+    else if(sh==='SK'){d.skKm+=e.km;d.skOt+=e.ot;}
+  });
+  Object.entries(map).sort((a,b)=>b[1].km-a[1].km).forEach(([drv,d])=>{
+    const days=d.dates.size;
+    csvRows.push([drv,days,Math.round(d.km),days?Math.round(d.km/days):0,
+      d.otWd.toFixed(1),d.otSun.toFixed(1),d.otHol.toFixed(1),
+      Math.round(d.tgKm),d.tgOt.toFixed(1),Math.round(d.skKm),d.skOt.toFixed(1)]);
+  });
+
+  const csv = '\uFEFF' + [header, ...csvRows]
     .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))
     .join('\r\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `シフト_${new Date().toISOString().slice(0,10)}.csv`;
+  const period = mode === 'year'
+    ? document.getElementById('summaryYear').value
+    : document.getElementById('summaryMonth').value || 'all';
+  a.download = `シフト集計_${period}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   toast('CSVをエクスポートしました');
@@ -1318,7 +1581,8 @@ function parseOCRResult(text, imgDataUrl) {
         <label>日種別</label>
         <div class="daytype-row">
           <button class="daytype-btn${ocrConfig.dayType==='weekday' ? ' wd' : ''}" id="ocrBtnWd" onclick="setOcrDayType('weekday')">平日</button>
-          <button class="daytype-btn${ocrConfig.dayType==='holiday' ? ' hol' : ''}" id="ocrBtnHol" onclick="setOcrDayType('holiday')">日・祝</button>
+          <button class="daytype-btn${ocrConfig.dayType==='sunday' ? ' sun' : ''}" id="ocrBtnSun" onclick="setOcrDayType('sunday')">日曜</button>
+          <button class="daytype-btn${ocrConfig.dayType==='holiday' ? ' hol' : ''}" id="ocrBtnHol" onclick="setOcrDayType('holiday')">祝日</button>
         </div>
       </div>
     </div>`;
@@ -1358,6 +1622,7 @@ function parseOCRResult(text, imgDataUrl) {
 function setOcrDayType(type) {
   ocrConfig.dayType = type;
   document.getElementById('ocrBtnWd').className  = 'daytype-btn' + (type==='weekday' ? ' wd'  : '');
+  document.getElementById('ocrBtnSun').className = 'daytype-btn' + (type==='sunday'  ? ' sun' : '');
   document.getElementById('ocrBtnHol').className = 'daytype-btn' + (type==='holiday' ? ' hol' : '');
 }
 
@@ -1409,7 +1674,7 @@ function doImportOCR(dest, count, driver, date, dayType, silent) {
     !(e.driver === driver && e.date === date && e.dayType === dayType && e.dest === dest)
   );
   const km = getKm(dest) * count;
-  const ot = (dayType === 'weekday' ? getOtNormal(dest) : getOtHoliday(dest)) * count;
+  const ot = getOtRate(dest, dayType) * count;
   state.entries.push({ driver, date, dayType, dest, count, km, ot });
   saveState();
   updateResult();
@@ -1659,8 +1924,8 @@ function init() {
 
   document.getElementById('summaryMonth').value = `${y}-${m}`;
 
-  // Auto holiday if Sunday
-  if (today.getDay() === 0) setDayType('holiday');
+  // Auto sunday if Sunday
+  if (today.getDay() === 0) setDayType('sunday');
 
   renderDriverSelect();
   renderDestList();
