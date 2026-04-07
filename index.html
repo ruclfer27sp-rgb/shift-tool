@@ -438,6 +438,25 @@ function checkApproval(){
     </div>
   </div>
 
+  <div class="card" id="adjustCard">
+    <div class="card-title">⚙️ 個人調整（キャンセル・追加対応）</div>
+    <div class="ctrl-grid">
+      <div>
+        <label>時間調整（残業h）</label>
+        <select id="adjustTime">
+          <option value="0" selected>± 0:00</option>
+        </select>
+      </div>
+      <div>
+        <label>距離調整（km）</label>
+        <select id="adjustKm">
+          <option value="0" selected>± 0 km</option>
+        </select>
+      </div>
+    </div>
+    <div id="adjustInfo" style="font-size:11px;color:var(--text-muted);margin-top:2px"></div>
+  </div>
+
   <div class="result-grid" id="resultCards"></div>
 
   <div id="selectedSummary" class="selected-summary">
@@ -842,6 +861,7 @@ let state = {
   entries: [],
   customDests: [],
   destCustom: {}, // {[destName]: {startTime:'', shipper:'', km, ot_normal, ot_holiday}} MASTER配送先の上書き
+  adjustments: {}, // {[driver|date|dayType]: {ot: 0, km: 0}} 個人調整値
   currentDriver: '',
   currentDate: '',
   currentDayType: 'weekday'
@@ -895,6 +915,7 @@ function saveState() {
   localStorage.setItem('sc_customDests',   JSON.stringify(state.customDests));
   localStorage.setItem('sc_driverDetails', JSON.stringify(state.driverDetails));
   localStorage.setItem('sc_destCustom',    JSON.stringify(state.destCustom));
+  localStorage.setItem('sc_adjustments',   JSON.stringify(state.adjustments));
 }
 function loadState() {
   try {
@@ -903,11 +924,13 @@ function loadState() {
     const cd  = localStorage.getItem('sc_customDests');
     const dd  = localStorage.getItem('sc_driverDetails');
     const dc  = localStorage.getItem('sc_destCustom');
+    const adj = localStorage.getItem('sc_adjustments');
     if (e)   state.entries       = JSON.parse(e);
     if (d)   state.drivers       = JSON.parse(d);
     if (cd)  state.customDests   = JSON.parse(cd);
     if (dd)  state.driverDetails = JSON.parse(dd);
     if (dc)  state.destCustom    = JSON.parse(dc);
+    if (adj) state.adjustments   = JSON.parse(adj);
   } catch(ex) { console.warn('loadState error', ex); }
 }
 function saveApiKey() {
@@ -977,12 +1000,14 @@ function renderDriverSelect() {
 document.getElementById('driverSelect').addEventListener('change', () => {
   state.currentDriver = document.getElementById('driverSelect').value;
   renderDestList();
+  loadAdjustForCurrent();
   updateResult();
 });
 
 document.getElementById('dateInput').addEventListener('change', () => {
   state.currentDate = document.getElementById('dateInput').value;
   renderDestList();
+  loadAdjustForCurrent();
   updateResult();
 });
 
@@ -999,6 +1024,7 @@ function setDayType(type) {
   document.getElementById('btnHoliday').className =
     'daytype-btn' + (type === 'holiday' ? ' hol' : '');
   renderDestList();
+  loadAdjustForCurrent();
   updateResult();
 }
 
@@ -1139,11 +1165,22 @@ function updateResult() {
   const all = state.entries.filter(e => e.driver === drv);
   const day = all.filter(e => e.date === dt && e.dayType === state.currentDayType);
 
-  const todayKm  = day.reduce((s, e) => s + e.km, 0);
-  const totalKm  = all.reduce((s, e) => s + e.km, 0);
-  const totalWage = totalKm * RATE_PER_KM;
-  const totalOt   = all.reduce((s, e) => s + e.ot, 0);
-  const days      = new Set(all.map(e => e.date)).size;
+  // 当日の調整値
+  const dayAdj = getAdjust(drv, dt, state.currentDayType);
+
+  // 累計: 全日の調整値を合算
+  let totalAdjKm = 0, totalAdjOt = 0;
+  if (drv) {
+    Object.entries(state.adjustments).forEach(([k, v]) => {
+      if (k.startsWith(drv + '|')) { totalAdjKm += v.km; totalAdjOt += v.ot; }
+    });
+  }
+
+  const todayKm   = day.reduce((s, e) => s + e.km, 0) + dayAdj.km;
+  const totalKm   = all.reduce((s, e) => s + e.km, 0) + totalAdjKm;
+  const totalWage  = totalKm * RATE_PER_KM;
+  const totalOt    = all.reduce((s, e) => s + e.ot, 0) + totalAdjOt;
+  const days       = new Set(all.map(e => e.date)).size;
 
   const cards = [
     { icon:'🚗', label:'本日 km',   val: drv ? fmtKm(todayKm)    : '--' },
@@ -1176,17 +1213,22 @@ function updateResult() {
   const todayCard = document.getElementById('todayCard');
   const todayTbl  = document.getElementById('todayTable');
 
-  if (day.length > 0) {
+  const hasDay = day.length > 0 || dayAdj.km !== 0 || dayAdj.ot !== 0;
+  if (hasDay) {
     todayCard.style.display = '';
     const rows = day.map(e =>
       `<tr><td>${esc(e.dest)}</td><td class="r">${e.count}回</td>` +
       `<td class="r">${fmtKm(e.km)}</td><td class="r">${fmtOt(e.ot)}</td></tr>`
     ).join('');
-    const sumKm = day.reduce((s,e)=>s+e.km,0);
-    const sumOt = day.reduce((s,e)=>s+e.ot,0);
+    const adjRow = (dayAdj.km !== 0 || dayAdj.ot !== 0)
+      ? `<tr style="color:var(--gold)"><td>⚙️ 調整</td><td></td>` +
+        `<td class="r">${dayAdj.km > 0 ? '+' : ''}${dayAdj.km} km</td>` +
+        `<td class="r">${dayAdj.ot > 0 ? '+' : ''}${dayAdj.ot.toFixed(1)} h</td></tr>` : '';
+    const sumKm = day.reduce((s,e)=>s+e.km,0) + dayAdj.km;
+    const sumOt = day.reduce((s,e)=>s+e.ot,0) + dayAdj.ot;
     todayTbl.innerHTML =
       `<thead><tr><th>配送先</th><th class="r">回数</th><th class="r">km</th><th class="r">残業h</th></tr></thead>` +
-      `<tbody>${rows}` +
+      `<tbody>${rows}${adjRow}` +
       `<tr style="font-weight:800;background:rgba(199,163,94,0.06)">` +
       `<td>合計</td><td></td><td class="r">${fmtKm(sumKm)}</td><td class="r">${fmtOt(sumOt)}</td></tr>` +
       `</tbody>`;
@@ -1255,6 +1297,22 @@ function updateSummary() {
     if (shipper === 'TG')      { d.tgKm += e.km; d.tgOt += e.ot; }
     else if (shipper === 'SK') { d.skKm += e.km; d.skOt += e.ot; }
     else                       { d.otherKm += e.km; d.otherOt += e.ot; }
+  });
+
+  // 調整値を加算
+  const mode = document.getElementById('summaryViewMode').value;
+  const filterPrefix = mode === 'year'
+    ? document.getElementById('summaryYear').value
+    : document.getElementById('summaryMonth').value;
+  Object.entries(state.adjustments).forEach(([key, adj]) => {
+    const [drv, date, dayType] = key.split('|');
+    if (filterPrefix && !date.startsWith(filterPrefix)) return;
+    if (!map[drv]) return; // 配送データがないドライバーの調整は無視
+    const d = map[drv];
+    d.km += adj.km;
+    if (dayType === 'weekday')     d.otWd  += adj.ot;
+    else if (dayType === 'sunday') d.otSun += adj.ot;
+    else                           d.otHol += adj.ot;
   });
 
   const rows = Object.entries(map)
@@ -1452,6 +1510,16 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
     const sh = getShipper(e.dest);
     if (sh==='TG'){d.tgKm+=e.km;d.tgOt+=e.ot;}
     else if(sh==='SK'){d.skKm+=e.km;d.skOt+=e.ot;}
+  });
+  // CSV集計にも調整値を加算
+  Object.entries(state.adjustments).forEach(([key, adj]) => {
+    const [drv, date, dayType] = key.split('|');
+    if (!map[drv]) return;
+    const d = map[drv];
+    d.km += adj.km;
+    if (dayType==='weekday') d.otWd+=adj.ot;
+    else if (dayType==='sunday') d.otSun+=adj.ot;
+    else d.otHol+=adj.ot;
   });
   Object.entries(map).sort((a,b)=>b[1].km-a[1].km).forEach(([drv,d])=>{
     const days=d.dates.size;
@@ -2005,9 +2073,93 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
 // ================================================================
 // Init
 // ================================================================
+// ================================================================
+// 個人調整（時間・距離）
+// ================================================================
+function getAdjustKey() {
+  return `${state.currentDriver}|${state.currentDate}|${state.currentDayType}`;
+}
+
+function getAdjust(driver, date, dayType) {
+  return state.adjustments[`${driver}|${date}|${dayType}`] || { ot: 0, km: 0 };
+}
+
+function initAdjustSelects() {
+  const timeSel = document.getElementById('adjustTime');
+  const kmSel   = document.getElementById('adjustKm');
+  timeSel.innerHTML = '';
+  kmSel.innerHTML = '';
+
+  // 時間: -3:00 ~ +3:00 (10分刻み = 0.167h刻み)
+  for (let min = -180; min <= 180; min += 10) {
+    const h = min / 60;
+    const absMin = Math.abs(min);
+    const hh = Math.floor(absMin / 60);
+    const mm = String(absMin % 60).padStart(2, '0');
+    const sign = min > 0 ? '+' : min < 0 ? '-' : '±';
+    const label = min === 0 ? '± 0:00' : `${sign} ${hh}:${mm}`;
+    const opt = document.createElement('option');
+    opt.value = h;
+    opt.textContent = label;
+    if (min === 0) opt.selected = true;
+    timeSel.appendChild(opt);
+  }
+
+  // 距離: -200 ~ +200 (10km刻み)
+  for (let km = -200; km <= 200; km += 10) {
+    const sign = km > 0 ? '+' : km < 0 ? '' : '±';
+    const label = km === 0 ? '± 0 km' : `${sign}${km} km`;
+    const opt = document.createElement('option');
+    opt.value = km;
+    opt.textContent = label;
+    if (km === 0) opt.selected = true;
+    kmSel.appendChild(opt);
+  }
+}
+
+function loadAdjustForCurrent() {
+  const adj = getAdjust(state.currentDriver, state.currentDate, state.currentDayType);
+  document.getElementById('adjustTime').value = adj.ot;
+  document.getElementById('adjustKm').value   = adj.km;
+  updateAdjustInfo();
+}
+
+function saveAdjust() {
+  const key = getAdjustKey();
+  const ot  = parseFloat(document.getElementById('adjustTime').value) || 0;
+  const km  = parseFloat(document.getElementById('adjustKm').value)   || 0;
+  if (ot === 0 && km === 0) {
+    delete state.adjustments[key];
+  } else {
+    state.adjustments[key] = { ot, km };
+  }
+  saveState();
+  updateAdjustInfo();
+  updateResult();
+}
+
+function updateAdjustInfo() {
+  const ot = parseFloat(document.getElementById('adjustTime').value) || 0;
+  const km = parseFloat(document.getElementById('adjustKm').value)   || 0;
+  const el = document.getElementById('adjustInfo');
+  if (ot === 0 && km === 0) {
+    el.textContent = '';
+  } else {
+    const parts = [];
+    if (ot !== 0) parts.push(`残業 ${ot > 0 ? '+' : ''}${ot.toFixed(1)}h`);
+    if (km !== 0) parts.push(`距離 ${km > 0 ? '+' : ''}${km} km`);
+    el.textContent = `調整値: ${parts.join(' / ')}`;
+    el.style.color = 'var(--gold)';
+  }
+}
+
+document.getElementById('adjustTime').addEventListener('change', saveAdjust);
+document.getElementById('adjustKm').addEventListener('change', saveAdjust);
+
 function init() {
   loadState();
   loadApiKey();
+  initAdjustSelects();
 
   const today = new Date();
   const y = today.getFullYear();
@@ -2025,6 +2177,7 @@ function init() {
 
   renderDriverSelect();
   renderDestList();
+  loadAdjustForCurrent();
   updateResult();
 }
 
