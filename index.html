@@ -738,6 +738,7 @@ function checkApproval(){
 // 定数
 // ================================================================
 const RATE_PER_KM = 8.67;
+const TOTAL_DRIVERS = 69; // 全稼働ドライバー数（平均計算用）
 
 // ================================================================
 // マスターデータ（実際のExcelデータに置き換えてください）
@@ -1269,7 +1270,7 @@ function updateSummary() {
   const totKm   = rows.reduce((s,r)=>s+r.km, 0);
   const totWage = rows.reduce((s,r)=>s+r.wage, 0);
   const totOt   = rows.reduce((s,r)=>s+r.otWd+r.otSun+r.otHol, 0);
-  const avgKmAll = rows.length > 0 ? totKm / rows.length : 0;
+  const avgKmAll = totKm / TOTAL_DRIVERS; // 全69人で割った1人当たり平均
 
   // 全体統計カード
   document.getElementById('summaryStats').innerHTML = `
@@ -1335,7 +1336,7 @@ function renderFairnessChart(rows, avgKm) {
   const maxDev = Math.max(...rows.map(r => Math.abs(r.km - avgKm)), 1);
 
   const legend = `<div class="fair-legend">
-    <span>← 平均以下</span><span>平均: ${Math.round(avgKm).toLocaleString()} km</span><span>平均以上 →</span>
+    <span>← 平均以下</span><span>69人平均: ${Math.round(avgKm).toLocaleString()} km</span><span>平均以上 →</span>
   </div>`;
 
   const bars = rows.map(r => {
