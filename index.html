@@ -283,13 +283,29 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
 <div id="pw-overlay">
   <div id="pw-box">
     <h2>シフト計算ツール</h2>
-    <p>パスワードを入力してください</p>
-    <input id="pw-input" type="password" placeholder="パスワード" autocomplete="off">
-    <button id="pw-btn" onclick="checkPw()">ログイン</button>
+    <!-- Step 1: パスワード -->
+    <div id="pw-step1">
+      <p>パスワードを入力してください</p>
+      <input id="pw-input" type="password" placeholder="パスワード" autocomplete="off">
+      <button id="pw-btn" onclick="checkPw()">ログイン</button>
+    </div>
+    <!-- Step 2: 初回承認コード -->
+    <div id="pw-step2" style="display:none">
+      <p style="color:var(--text-mid);font-size:13px;margin-bottom:6px">このデバイスからの初回アクセスです</p>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">管理者から発行された承認コードを入力してください</p>
+      <input id="pw-approval" type="text" placeholder="承認コード（6桁）" autocomplete="off"
+        maxlength="6" inputmode="numeric" style="letter-spacing:6px;text-align:center;font-size:20px;font-weight:800">
+      <button id="pw-approve-btn" onclick="checkApproval()" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#276749,#38a169);
+        color:white;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">承認する</button>
+      <div style="margin-top:12px;font-size:11px;color:var(--text-muted);text-align:left;background:#f7fafc;border-radius:8px;padding:10px">
+        承認コードは管理者にお問い合わせください。<br>一度承認されると、このデバイスでは次回以降パスワードのみでログインできます。
+      </div>
+    </div>
     <div id="pw-error"></div>
   </div>
 </div>
 <script>
+var APPROVAL_CODE = '248163';
 (function(){
   if(sessionStorage.getItem('sc_auth')==='ok'){
     document.getElementById('pw-overlay').style.display='none';
@@ -297,16 +313,40 @@ body { padding-bottom: env(safe-area-inset-bottom, 0px); }
   document.getElementById('pw-input').addEventListener('keydown',function(e){
     if(e.key==='Enter') checkPw();
   });
+  document.getElementById('pw-approval').addEventListener('keydown',function(e){
+    if(e.key==='Enter') checkApproval();
+  });
 })();
 function checkPw(){
   var v=document.getElementById('pw-input').value;
   if(v==='enexshift2025'){
-    sessionStorage.setItem('sc_auth','ok');
-    document.getElementById('pw-overlay').style.display='none';
+    // 承認済みデバイスか確認
+    if(localStorage.getItem('sc_approved')==='ok'){
+      sessionStorage.setItem('sc_auth','ok');
+      document.getElementById('pw-overlay').style.display='none';
+    } else {
+      // 初回: 承認コード入力ステップへ
+      document.getElementById('pw-step1').style.display='none';
+      document.getElementById('pw-step2').style.display='';
+      document.getElementById('pw-error').textContent='';
+      document.getElementById('pw-approval').focus();
+    }
   } else {
     document.getElementById('pw-error').textContent='パスワードが違います';
     document.getElementById('pw-input').value='';
     document.getElementById('pw-input').focus();
+  }
+}
+function checkApproval(){
+  var code=document.getElementById('pw-approval').value.trim();
+  if(code===APPROVAL_CODE){
+    localStorage.setItem('sc_approved','ok');
+    sessionStorage.setItem('sc_auth','ok');
+    document.getElementById('pw-overlay').style.display='none';
+  } else {
+    document.getElementById('pw-error').textContent='承認コードが正しくありません';
+    document.getElementById('pw-approval').value='';
+    document.getElementById('pw-approval').focus();
   }
 }
 </script>
@@ -535,9 +575,9 @@ function checkPw(){
         <div>
           <label>荷主</label>
           <select id="newDestShipper">
-            <option value="">-</option>
-            <option value="TG">TG</option>
+            <option value="TG" selected>TG</option>
             <option value="SK">SK</option>
+            <option value="">-</option>
           </select>
         </div>
         <div>
@@ -578,9 +618,9 @@ function checkPw(){
     <div style="margin-bottom:10px">
       <label>荷主</label>
       <select id="destModalShipper" style="width:100%">
-        <option value="">-</option>
         <option value="TG">TG</option>
         <option value="SK">SK</option>
+        <option value="">-</option>
       </select>
     </div>
     <div style="margin-bottom:10px">
@@ -783,8 +823,10 @@ function getStartTime(dest) {
   return state.customDests.find(c => c.name === dest)?.startTime || '';
 }
 function getShipper(dest) {
-  if (dest in state.destCustom) return state.destCustom[dest].shipper || '';
-  return state.customDests.find(c => c.name === dest)?.shipper || '';
+  if (dest in state.destCustom) return state.destCustom[dest].shipper || 'TG';
+  const custom = state.customDests.find(c => c.name === dest);
+  if (custom) return custom.shipper || 'TG';
+  return 'TG';
 }
 let ocrResults = [];
 let ocrConfig  = { driver: '', date: '', dayType: 'weekday' };
@@ -1774,7 +1816,7 @@ function addCustomDest() {
   saveState();
 
   document.getElementById('newDestName').value    = '';
-  document.getElementById('newDestShipper').value = '';
+  document.getElementById('newDestShipper').value = 'TG';
   document.getElementById('newDestStart').value   = '';
   document.getElementById('newDestKm').value      = '';
   document.getElementById('newDestOtWd').value    = '';
