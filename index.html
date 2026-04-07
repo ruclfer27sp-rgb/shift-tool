@@ -518,7 +518,7 @@ function checkApproval(){
           <th>ドライバー</th>
           <th class="r">出勤</th>
           <th class="r">総km</th>
-          <th class="r">日平均km</th>
+          <th class="r">差異</th>
           <th class="r">平日OT</th>
           <th class="r">日曜OT</th>
           <th class="r">祝日OT</th>
@@ -1326,24 +1326,28 @@ function updateSummary() {
     .sort((a, b) => b.km - a.km);
 
   const totKm   = rows.reduce((s,r)=>s+r.km, 0);
-  const totWage = rows.reduce((s,r)=>s+r.wage, 0);
-  const totOt   = rows.reduce((s,r)=>s+r.otWd+r.otSun+r.otHol, 0);
+  const totOtWd = rows.reduce((s,r)=>s+r.otWd, 0);
+  const totOtSun = rows.reduce((s,r)=>s+r.otSun, 0);
+  const totOtHol = rows.reduce((s,r)=>s+r.otHol, 0);
+  const totOt   = totOtWd + totOtSun + totOtHol;
   const avgKmAll = totKm / TOTAL_DRIVERS; // 全69人で割った1人当たり平均
+  const avgOtWd  = totOtWd / TOTAL_DRIVERS; // 平日平均残業（69人）
+  const avgOtHolAll = (totOtSun + totOtHol) / TOTAL_DRIVERS; // 日祝平均残業（69人）
 
   // 全体統計カード
   document.getElementById('summaryStats').innerHTML = `
     <div class="stat-card"><div class="stat-icon">📍</div>
       <div class="stat-val">${Math.round(totKm).toLocaleString()}</div>
       <div class="stat-lbl">総走行距離 km</div></div>
-    <div class="stat-card"><div class="stat-icon">💴</div>
-      <div class="stat-val">${Math.round(totWage/10000)}万</div>
-      <div class="stat-lbl">総賃金</div></div>
+    <div class="stat-card"><div class="stat-icon">⏱️</div>
+      <div class="stat-val">${avgOtWd.toFixed(1)} h</div>
+      <div class="stat-lbl">平日平均残業 (÷69)</div></div>
+    <div class="stat-card"><div class="stat-icon">🗓️</div>
+      <div class="stat-val">${avgOtHolAll.toFixed(1)} h</div>
+      <div class="stat-lbl">日祝平均残業 (÷69)</div></div>
     <div class="stat-card"><div class="stat-icon">⏱️</div>
       <div class="stat-val">${totOt.toFixed(1)}</div>
-      <div class="stat-lbl">総残業時間 h</div></div>
-    <div class="stat-card"><div class="stat-icon">👥</div>
-      <div class="stat-val">${rows.length}</div>
-      <div class="stat-lbl">実働ドライバー</div></div>`;
+      <div class="stat-lbl">総残業時間 h</div></div>`;
 
   // ドライバー別テーブル
   const empty = document.getElementById('summaryEmpty');
@@ -1363,11 +1367,15 @@ function updateSummary() {
     const badge = i < 3
       ? `<span class="rank ${rankCls[i]}">${['🥇','🥈','🥉'][i]}</span>`
       : `<span class="rank rn">${i+1}</span>`;
+    const diff = r.km - avgKmAll;
+    const diffStr = (diff >= 0 ? '+' : '') + Math.round(diff).toLocaleString() + ' km';
+    const diffColor = Math.abs(diff) / avgKmAll > 0.2
+      ? (diff > 0 ? 'color:#60a5fa' : 'color:#fb7185') : '';
     return `<tr>
       <td>${badge}${esc(r.drv)}</td>
       <td class="r">${r.days}日</td>
       <td class="r">${Math.round(r.km).toLocaleString()}</td>
-      <td class="r">${Math.round(r.avgKm).toLocaleString()}</td>
+      <td class="r" style="font-weight:700;${diffColor}">${diffStr}</td>
       <td class="r">${r.otWd.toFixed(1)}</td>
       <td class="r">${r.otSun.toFixed(1)}</td>
       <td class="r">${r.otHol.toFixed(1)}</td>
