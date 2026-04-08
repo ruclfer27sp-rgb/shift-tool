@@ -490,7 +490,8 @@ function checkApproval(){
 
   <div class="card">
     <div class="action-row" style="flex-wrap:wrap">
-      <button class="btn btn-primary" id="exportCsvBtn">⬇️ CSV エクスポート</button>
+      <button class="btn btn-primary" id="exportPdfBtn">📄 PDF</button>
+      <button class="btn btn-primary" id="exportXlsxBtn" style="background:linear-gradient(135deg,#1a7a3a,#22994a)">📊 Excel</button>
       <button class="btn btn-success" id="refreshSummaryBtn">🔄 更新</button>
     </div>
     <div class="ctrl-grid" style="margin-bottom:12px">
@@ -686,7 +687,7 @@ function checkApproval(){
   </div>
   <div class="card">
     <div class="card-title">💾 データ管理</div>
-    <div class="warn-box">⚠️ 月次締め後はCSVエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
+    <div class="warn-box">⚠️ 月次締め後はPDF/Excelエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
     <button class="btn btn-danger" id="clearAllBtn">🗑️ 全データ削除</button>
   </div>
 </div>
@@ -1502,25 +1503,15 @@ function renderYearlyTable(entries) {
 document.getElementById('refreshSummaryBtn').addEventListener('click', updateSummary);
 document.getElementById('summaryMonth').addEventListener('input', updateSummary);
 
-document.getElementById('exportCsvBtn').addEventListener('click', () => {
-  if (state.entries.length === 0) { toast('エクスポートするデータがありません', 'err'); return; }
-
+// ================================================================
+// エクスポート共通: 集計データ生成
+// ================================================================
+function buildExportData() {
   const mode = document.getElementById('summaryViewMode').value;
   const entries = getFilteredEntries();
-
-  // 明細CSV
-  const header = ['ドライバー','日付','日種別','配送先','荷主','回数','km','賃金','残業h'];
-  const csvRows = entries.map(e => [
-    e.driver, e.date,
-    {weekday:'平日',sunday:'日曜',holiday:'祝日'}[e.dayType] || e.dayType,
-    e.dest, getShipper(e.dest), e.count, e.km,
-    Math.round(e.km * RATE_PER_KM), e.ot
-  ]);
-
-  // 集計サマリーも追加
-  csvRows.push([]);
-  csvRows.push(['--- ドライバー別集計 ---']);
-  csvRows.push(['ドライバー','出勤日数','総km','日平均km','平日OT','日曜OT','祝日OT','TG km','TG OT','SK km','SK OT']);
+  const period = mode === 'year'
+    ? document.getElementById('summaryYear').value
+    : document.getElementById('summaryMonth').value || 'all';
 
   const map = {};
   entries.forEach(e => {
@@ -1534,7 +1525,6 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
     if (sh==='TG'){d.tgKm+=e.km;d.tgOt+=e.ot;}
     else if(sh==='SK'){d.skKm+=e.km;d.skOt+=e.ot;}
   });
-  // CSV集計にも調整値を加算
   Object.entries(state.adjustments).forEach(([key, adj]) => {
     const [drv, date, dayType] = key.split('|');
     if (!map[drv]) return;
@@ -1544,27 +1534,201 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
     else if (dayType==='sunday') d.otSun+=adj.ot;
     else d.otHol+=adj.ot;
   });
-  Object.entries(map).sort((a,b)=>b[1].km-a[1].km).forEach(([drv,d])=>{
-    const days=d.dates.size;
-    csvRows.push([drv,days,Math.round(d.km),days?Math.round(d.km/days):0,
-      d.otWd.toFixed(1),d.otSun.toFixed(1),d.otHol.toFixed(1),
-      Math.round(d.tgKm),d.tgOt.toFixed(1),Math.round(d.skKm),d.skOt.toFixed(1)]);
+
+  const driverRows = Object.entries(map).sort((a,b)=>b[1].km-a[1].km).map(([drv,d])=>{
+    const days = d.dates.size;
+    return {drv, days, km:d.km, avgKm:days?d.km/days:0,
+      otWd:d.otWd, otSun:d.otSun, otHol:d.otHol,
+      tgKm:d.tgKm, tgOt:d.tgOt, skKm:d.skKm, skOt:d.skOt};
   });
 
-  const csv = '\uFEFF' + [header, ...csvRows]
-    .map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(','))
-    .join('\r\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  const period = mode === 'year'
-    ? document.getElementById('summaryYear').value
-    : document.getElementById('summaryMonth').value || 'all';
-  a.download = `シフト集計_${period}_${new Date().toISOString().slice(0,10)}.csv`;
+  const totKm = driverRows.reduce((s,r)=>s+r.km,0);
+  const totOtWd = driverRows.reduce((s,r)=>s+r.otWd,0);
+  const totOtSun = driverRows.reduce((s,r)=>s+r.otSun,0);
+  const totOtHol = driverRows.reduce((s,r)=>s+r.otHol,0);
+
+  return { entries, period, driverRows, totKm, totOtWd, totOtSun, totOtHol };
+}
+
+// ================================================================
+// PDF エクスポート
+// ================================================================
+document.getElementById('exportPdfBtn').addEventListener('click', () => {
+  if (state.entries.length === 0) { toast('エクスポートするデータがありません', 'err'); return; }
+  const d = buildExportData();
+  const avgKm = d.totKm / TOTAL_DRIVERS;
+  const avgOtWd = d.totOtWd / TOTAL_DRIVERS;
+  const avgOtHol = (d.totOtSun + d.totOtHol) / TOTAL_DRIVERS;
+  const totOt = d.totOtWd + d.totOtSun + d.totOtHol;
+
+  // ドライバー別テーブルHTML
+  const drvTableRows = d.driverRows.map((r,i) => {
+    const diff = r.km - avgKm;
+    const diffStr = (diff>=0?'+':'') + Math.round(diff).toLocaleString() + ' km';
+    const diffColor = Math.abs(diff)/avgKm>0.2 ? (diff>0?'color:#3b82f6':'color:#ef4444') : '';
+    return `<tr>
+      <td style="text-align:center">${i+1}</td><td>${esc(r.drv)}</td>
+      <td class="r">${r.days}</td><td class="r">${Math.round(r.km).toLocaleString()}</td>
+      <td class="r" style="${diffColor};font-weight:700">${diffStr}</td>
+      <td class="r">${r.otWd.toFixed(1)}</td><td class="r">${r.otSun.toFixed(1)}</td>
+      <td class="r">${r.otHol.toFixed(1)}</td></tr>`;
+  }).join('');
+
+  // 荷主別テーブルHTML
+  const shipperRows = d.driverRows.filter(r=>r.tgKm>0||r.skKm>0).map(r => {
+    const allowance = Math.round((r.tgKm + r.skKm) * RATE_PER_KM);
+    return `<tr><td>${esc(r.drv)}</td>
+      <td class="r">${Math.round(r.tgKm).toLocaleString()}</td><td class="r">${r.tgOt.toFixed(1)}</td>
+      <td class="r">${Math.round(r.skKm).toLocaleString()}</td><td class="r">${r.skOt.toFixed(1)}</td>
+      <td class="r" style="font-weight:700">¥${allowance.toLocaleString()}</td></tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>シフト集計_${d.period}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Meiryo','Hiragino Sans',sans-serif;color:#1a1a2e;padding:20px;font-size:11px}
+  h1{font-size:18px;color:#0f172a;border-bottom:3px solid #c7a35e;padding-bottom:6px;margin-bottom:12px}
+  h2{font-size:13px;color:#0f172a;margin:16px 0 6px;padding:4px 8px;background:#f1f5f9;border-left:4px solid #c7a35e}
+  .stats{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .stat{border:1px solid #cbd5e1;border-radius:6px;padding:8px 14px;min-width:140px;text-align:center}
+  .stat-v{font-size:18px;font-weight:800;color:#0f172a}
+  .stat-l{font-size:9px;color:#64748b;margin-top:2px}
+  table{width:100%;border-collapse:collapse;margin-bottom:10px;font-size:10px}
+  th{background:#0f172a;color:#c7a35e;padding:5px 6px;text-align:left;font-weight:700}
+  td{padding:4px 6px;border-bottom:1px solid #e2e8f0}
+  tr:nth-child(even){background:#f8fafc}
+  .r{text-align:right}
+  .footer{margin-top:16px;text-align:center;font-size:9px;color:#94a3b8}
+  @media print{body{padding:10px}@page{size:A4 landscape;margin:10mm}}
+</style></head><body>
+<h1>シフト集計レポート — ${d.period}</h1>
+<div style="text-align:right;font-size:10px;color:#64748b;margin-bottom:10px">出力日: ${new Date().toLocaleDateString('ja-JP')} ／ 平均算出人数: ${TOTAL_DRIVERS}人</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-v">${Math.round(d.totKm).toLocaleString()} km</div><div class="stat-l">総走行距離</div></div>
+  <div class="stat"><div class="stat-v">${avgKm.toFixed(0)} km</div><div class="stat-l">距離平均 (÷${TOTAL_DRIVERS})</div></div>
+  <div class="stat"><div class="stat-v">${avgOtWd.toFixed(1)} h</div><div class="stat-l">平日平均残業 (÷${TOTAL_DRIVERS})</div></div>
+  <div class="stat"><div class="stat-v">${avgOtHol.toFixed(1)} h</div><div class="stat-l">日祝平均残業 (÷${TOTAL_DRIVERS})</div></div>
+  <div class="stat"><div class="stat-v">${totOt.toFixed(1)} h</div><div class="stat-l">総残業時間</div></div>
+</div>
+
+<h2>ドライバー別集計</h2>
+<table><thead><tr><th>#</th><th>ドライバー</th><th class="r">出勤</th><th class="r">総km</th><th class="r">差異</th><th class="r">平日OT</th><th class="r">日曜OT</th><th class="r">祝日OT</th></tr></thead>
+<tbody>${drvTableRows}</tbody></table>
+
+${shipperRows ? `<h2>荷主別集計（TG / SK）</h2>
+<table><thead><tr><th>ドライバー</th><th class="r">TG km</th><th class="r">TG OT</th><th class="r">SK km</th><th class="r">SK OT</th><th class="r">距離手当</th></tr></thead>
+<tbody>${shipperRows}</tbody></table>` : ''}
+
+<div class="footer">シフト計算ツール — 自動生成レポート</div>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  w.onload = () => { w.print(); };
+  toast('PDF印刷画面を表示しました');
+});
+
+// ================================================================
+// Excel エクスポート
+// ================================================================
+document.getElementById('exportXlsxBtn').addEventListener('click', () => {
+  if (state.entries.length === 0) { toast('エクスポートするデータがありません', 'err'); return; }
+  const d = buildExportData();
+  const avgKm = d.totKm / TOTAL_DRIVERS;
+
+  // 明細シート
+  const detailRows = d.entries.map(e =>
+    `<Row>
+      <Cell><Data ss:Type="String">${esc(e.driver)}</Data></Cell>
+      <Cell><Data ss:Type="String">${e.date}</Data></Cell>
+      <Cell><Data ss:Type="String">${{weekday:'平日',sunday:'日曜',holiday:'祝日'}[e.dayType]||e.dayType}</Data></Cell>
+      <Cell><Data ss:Type="String">${esc(e.dest)}</Data></Cell>
+      <Cell><Data ss:Type="String">${getShipper(e.dest)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${e.count}</Data></Cell>
+      <Cell><Data ss:Type="Number">${e.km}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round(e.km * RATE_PER_KM)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${e.ot}</Data></Cell>
+    </Row>`
+  ).join('\n');
+
+  // ドライバー別集計シート
+  const summaryRows = d.driverRows.map(r => {
+    const diff = r.km - avgKm;
+    return `<Row>
+      <Cell><Data ss:Type="String">${esc(r.drv)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${r.days}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round(r.km)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round(diff)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round(r.avgKm)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${parseFloat(r.otWd.toFixed(1))}</Data></Cell>
+      <Cell><Data ss:Type="Number">${parseFloat(r.otSun.toFixed(1))}</Data></Cell>
+      <Cell><Data ss:Type="Number">${parseFloat(r.otHol.toFixed(1))}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round(r.tgKm)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${parseFloat(r.tgOt.toFixed(1))}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round(r.skKm)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${parseFloat(r.skOt.toFixed(1))}</Data></Cell>
+      <Cell><Data ss:Type="Number">${Math.round((r.tgKm+r.skKm)*RATE_PER_KM)}</Data></Cell>
+    </Row>`;
+  }).join('\n');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Styles>
+  <Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#C7A35E"/><Interior ss:Color="#0F172A" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="num"><NumberFormat ss:Format="#,##0"/></Style>
+  <Style ss:ID="num1"><NumberFormat ss:Format="#,##0.0"/></Style>
+</Styles>
+<Worksheet ss:Name="明細">
+  <Table>
+    <Row ss:StyleID="hdr">
+      <Cell><Data ss:Type="String">ドライバー</Data></Cell>
+      <Cell><Data ss:Type="String">日付</Data></Cell>
+      <Cell><Data ss:Type="String">日種別</Data></Cell>
+      <Cell><Data ss:Type="String">配送先</Data></Cell>
+      <Cell><Data ss:Type="String">荷主</Data></Cell>
+      <Cell><Data ss:Type="String">回数</Data></Cell>
+      <Cell><Data ss:Type="String">km</Data></Cell>
+      <Cell><Data ss:Type="String">賃金</Data></Cell>
+      <Cell><Data ss:Type="String">残業h</Data></Cell>
+    </Row>
+    ${detailRows}
+  </Table>
+</Worksheet>
+<Worksheet ss:Name="ドライバー別集計">
+  <Table>
+    <Row ss:StyleID="hdr">
+      <Cell><Data ss:Type="String">ドライバー</Data></Cell>
+      <Cell><Data ss:Type="String">出勤日数</Data></Cell>
+      <Cell><Data ss:Type="String">総km</Data></Cell>
+      <Cell><Data ss:Type="String">差異km</Data></Cell>
+      <Cell><Data ss:Type="String">日平均km</Data></Cell>
+      <Cell><Data ss:Type="String">平日OT</Data></Cell>
+      <Cell><Data ss:Type="String">日曜OT</Data></Cell>
+      <Cell><Data ss:Type="String">祝日OT</Data></Cell>
+      <Cell><Data ss:Type="String">TG km</Data></Cell>
+      <Cell><Data ss:Type="String">TG OT</Data></Cell>
+      <Cell><Data ss:Type="String">SK km</Data></Cell>
+      <Cell><Data ss:Type="String">SK OT</Data></Cell>
+      <Cell><Data ss:Type="String">距離手当</Data></Cell>
+    </Row>
+    ${summaryRows}
+  </Table>
+</Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xml], {type:'application/vnd.ms-excel'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `シフト集計_${d.period}_${new Date().toISOString().slice(0,10)}.xls`;
   a.click();
   URL.revokeObjectURL(url);
-  toast('CSVをエクスポートしました');
+  toast('Excelをエクスポートしました');
 });
 
 // ================================================================
