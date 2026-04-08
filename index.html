@@ -983,12 +983,20 @@ let destFilter = '';
 // Persistence
 // ================================================================
 function saveState() {
-  localStorage.setItem('sc_entries',       JSON.stringify(state.entries));
-  localStorage.setItem('sc_drivers',       JSON.stringify(state.drivers));
-  localStorage.setItem('sc_customDests',   JSON.stringify(state.customDests));
-  localStorage.setItem('sc_driverDetails', JSON.stringify(state.driverDetails));
-  localStorage.setItem('sc_destCustom',    JSON.stringify(state.destCustom));
-  localStorage.setItem('sc_adjustments',   JSON.stringify(state.adjustments));
+  try {
+    localStorage.setItem('sc_entries',       JSON.stringify(state.entries));
+    localStorage.setItem('sc_drivers',       JSON.stringify(state.drivers));
+    localStorage.setItem('sc_customDests',   JSON.stringify(state.customDests));
+    localStorage.setItem('sc_driverDetails', JSON.stringify(state.driverDetails));
+    localStorage.setItem('sc_destCustom',    JSON.stringify(state.destCustom));
+    localStorage.setItem('sc_adjustments',   JSON.stringify(state.adjustments));
+    // 保存検証
+    const verify = localStorage.getItem('sc_drivers');
+    if (!verify) console.error('saveState: 保存検証失敗 - localStorageに書き込めません');
+  } catch(ex) {
+    console.error('saveState error:', ex);
+    alert('データの保存に失敗しました。ブラウザのプライベートモードや容量制限を確認してください。');
+  }
 }
 function loadState() {
   try {
@@ -1004,10 +1012,27 @@ function loadState() {
     if (dd)  state.driverDetails = JSON.parse(dd);
     if (dc)  state.destCustom    = JSON.parse(dc);
     if (adj) state.adjustments   = JSON.parse(adj);
+    console.log('loadState: ドライバー数=' + state.drivers.length + ', エントリ数=' + state.entries.length);
   } catch(ex) { console.warn('loadState error', ex); }
 }
+// ページ離脱時にも保存を保証
+window.addEventListener('beforeunload', function() { saveState(); });
+// visibilitychangeでバックグラウンド時も保存（スマホ対応）
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'hidden') saveState();
+});
 function saveApiKey() {
-  localStorage.setItem('sc_apikey', document.getElementById('apiKeyInput').value);
+  try {
+    const key = document.getElementById('apiKeyInput').value;
+    localStorage.setItem('sc_apikey', key);
+    // 即時検証
+    if (key && localStorage.getItem('sc_apikey') !== key) {
+      alert('APIキーの保存に失敗しました');
+    }
+  } catch(ex) {
+    console.error('saveApiKey error:', ex);
+    alert('APIキーの保存に失敗しました。プライベートモードでは保存できません。');
+  }
 }
 function loadApiKey() {
   document.getElementById('apiKeyInput').value =
@@ -2477,7 +2502,21 @@ function initTotalDriversSelect() {
   });
 }
 
+function checkStorage() {
+  try {
+    localStorage.setItem('sc_test', 'ok');
+    const v = localStorage.getItem('sc_test');
+    localStorage.removeItem('sc_test');
+    if (v !== 'ok') throw new Error('read mismatch');
+    return true;
+  } catch(e) {
+    alert('⚠️ このブラウザではデータ保存ができません。\n\nプライベート（シークレット）モードを使っている場合は通常モードで開き直してください。\n\nまた、ブラウザの設定で「Cookieとサイトデータ」が許可されているか確認してください。');
+    return false;
+  }
+}
+
 function init() {
+  checkStorage();
   loadState();
   loadApiKey();
   initTotalDriversSelect();
