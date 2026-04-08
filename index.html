@@ -548,8 +548,7 @@ function checkApproval(){
           <th class="r">TG OT</th>
           <th class="r">SK km</th>
           <th class="r">SK OT</th>
-          <th class="r">他 km</th>
-          <th class="r">他 OT</th>
+          <th class="r">距離手当</th>
         </tr></thead>
         <tbody id="shipperBody"></tbody>
       </table>
@@ -1433,17 +1432,17 @@ function renderShipperTable(rows) {
   if (!hasTgSk) { card.style.display = 'none'; return; }
   card.style.display = '';
 
-  document.getElementById('shipperBody').innerHTML = rows.map(r =>
-    `<tr>
+  document.getElementById('shipperBody').innerHTML = rows.map(r => {
+    const allowance = Math.round((r.tgKm + r.skKm) * RATE_PER_KM);
+    return `<tr>
       <td style="font-weight:700">${esc(r.drv)}</td>
       <td class="r">${Math.round(r.tgKm).toLocaleString()}</td>
       <td class="r">${r.tgOt.toFixed(1)}</td>
       <td class="r">${Math.round(r.skKm).toLocaleString()}</td>
       <td class="r">${r.skOt.toFixed(1)}</td>
-      <td class="r">${Math.round(r.otherKm).toLocaleString()}</td>
-      <td class="r">${r.otherOt.toFixed(1)}</td>
-    </tr>`
-  ).join('');
+      <td class="r" style="color:var(--gold);font-weight:700">¥${allowance.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
 }
 
 function renderYearlyTable(entries) {
