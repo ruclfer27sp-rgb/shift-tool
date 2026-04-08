@@ -533,7 +533,8 @@ function checkApproval(){
 
   <!-- 偏り可視化 -->
   <div class="card" id="fairnessCard" style="display:none">
-    <div class="card-title">距離の偏り（平均との差）</div>
+    <div class="card-title">距離平均（総走行距離÷69）</div>
+    <div id="fairnessAvgDisplay" style="text-align:center;padding:12px 0 8px"></div>
     <div id="fairnessChart"></div>
   </div>
 
@@ -1398,10 +1399,15 @@ function renderFairnessChart(rows, avgKm) {
   if (rows.length < 2) { card.style.display = 'none'; return; }
   card.style.display = '';
 
+  // 距離平均値を大きく表示
+  document.getElementById('fairnessAvgDisplay').innerHTML =
+    `<div style="font-size:2.2rem;font-weight:800;color:var(--gold);letter-spacing:.02em">${Math.round(avgKm).toLocaleString()} km</div>
+     <div style="font-size:.85rem;color:var(--muted);margin-top:2px">1人あたり平均走行距離（全69人）</div>`;
+
   const maxDev = Math.max(...rows.map(r => Math.abs(r.km - avgKm)), 1);
 
   const legend = `<div class="fair-legend">
-    <span>← 平均以下</span><span>69人平均: ${Math.round(avgKm).toLocaleString()} km</span><span>平均以上 →</span>
+    <span>← 平均以下</span><span>平均: ${Math.round(avgKm).toLocaleString()} km</span><span>平均以上 →</span>
   </div>`;
 
   const bars = rows.map(r => {
