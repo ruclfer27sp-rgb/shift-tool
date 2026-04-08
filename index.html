@@ -699,7 +699,7 @@ function checkApproval(){
     <div class="table-wrap" style="margin-bottom:16px">
       <table class="tbl" id="destAllTable">
         <thead><tr>
-          <th>届先</th><th>荷主</th><th>出勤時間</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th></th>
+          <th>届先</th><th>荷主</th><th>出勤</th><th>退勤</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th></th>
         </tr></thead>
         <tbody id="destAllBody"></tbody>
       </table>
@@ -768,17 +768,23 @@ function checkApproval(){
         <option value="">-</option>
       </select>
     </div>
-    <div style="margin-bottom:10px">
-      <label>出勤時間 (HH:MM)</label>
-      <input type="text" id="destModalStart" placeholder="例: 05:30" maxlength="5">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label>出勤時間 (HH:MM)</label>
+        <input type="text" id="destModalStart" placeholder="例: 05:30" maxlength="5">
+      </div>
+      <div>
+        <label>退勤時間 (HH:MM)</label>
+        <input type="text" id="destModalEnd" placeholder="例: 17:00" maxlength="5">
+      </div>
     </div>
     <div style="margin-bottom:10px">
-      <label>残業時間・平日 (h)</label>
-      <input type="text" id="destModalOtWd" inputmode="decimal" placeholder="例: 1.5">
+      <label>残業時間・平日 (h) <span id="destModalOtWdAuto" style="font-size:10px;color:var(--gold)"></span></label>
+      <input type="text" id="destModalOtWd" inputmode="decimal" placeholder="自動計算">
     </div>
     <div style="margin-bottom:10px">
-      <label>残業時間・日祝 (h)</label>
-      <input type="text" id="destModalOtHol" inputmode="decimal" placeholder="例: 4.0">
+      <label>残業時間・日祝 (h) <span id="destModalOtHolAuto" style="font-size:10px;color:var(--gold)"></span></label>
+      <input type="text" id="destModalOtHol" inputmode="decimal" placeholder="自動計算">
     </div>
     <div style="margin-bottom:16px">
       <label>距離 (km)</label>
@@ -968,6 +974,10 @@ function isCustomDest(dest) {
 function getStartTime(dest) {
   if (dest in state.destCustom) return state.destCustom[dest].startTime || '';
   return state.customDests.find(c => c.name === dest)?.startTime || '';
+}
+function getEndTime(dest) {
+  if (dest in state.destCustom) return state.destCustom[dest].endTime || '';
+  return state.customDests.find(c => c.name === dest)?.endTime || '';
 }
 function getShipper(dest) {
   if (dest in state.destCustom) return state.destCustom[dest].shipper || 'TG';
@@ -2147,6 +2157,7 @@ function renderManageTab() {
     getAllDests().map(d => {
       const custom = isCustomDest(d);
       const startVal  = getStartTime(d);
+      const endVal    = getEndTime(d);
       const shipVal   = getShipper(d);
       const shipSel   = (v) => ['','TG','SK'].map(opt =>
         `<option value="${opt}"${opt===v?' selected':''}>${opt||'-'}</option>`).join('');
@@ -2157,8 +2168,11 @@ function renderManageTab() {
           <td style="font-weight:700">${esc(d)}</td>
           <td><select style="${inpStyle};width:60px" onchange="updateCustomDestField('${esc(d)}','shipper',this.value)">${shipSel(shipVal)}</select></td>
           <td><input type="text" value="${esc(startVal)}" placeholder="HH:MM"
-            style="width:72px;${inpStyle}"
+            style="width:60px;${inpStyle}"
             onchange="updateCustomDestField('${esc(d)}','startTime',this.value)"></td>
+          <td><input type="text" value="${esc(endVal)}" placeholder="HH:MM"
+            style="width:60px;${inpStyle}"
+            onchange="updateCustomDestEndTime('${esc(d)}',this.value)"></td>
           <td class="r"><input type="text" value="${getOtNormal(d)}" inputmode="decimal"
             style="width:56px;text-align:right;${inpStyle}"
             onchange="updateCustomDestField('${esc(d)}','ot_normal',parseFloat(this.value)||0)"></td>
@@ -2179,6 +2193,7 @@ function renderManageTab() {
           <td style="font-weight:700">${esc(d)}</td>
           <td style="font-size:12px;color:${shipVal?'var(--text-bright)':'var(--text-muted)'}">${shipVal||'─'}</td>
           <td style="font-size:12px;color:${startVal?'var(--text-bright)':'var(--text-muted)'}">${startVal||'─'}</td>
+          <td style="font-size:12px;color:${endVal?'var(--text-bright)':'var(--text-muted)'}">${endVal||'─'}</td>
           <td class="r" style="font-size:12px">${getOtNormal(d)} h</td>
           <td class="r" style="font-size:12px">${getOtHoliday(d)} h</td>
           <td class="r" style="font-size:12px">${getKm(d)} km</td>
@@ -2296,9 +2311,13 @@ function openDestModal(dest) {
   const ov = state.destCustom[dest] || {};
   document.getElementById('destModalShipper').value = ov.shipper  != null ? ov.shipper  : getShipper(dest);
   document.getElementById('destModalStart').value   = ov.startTime != null ? ov.startTime : getStartTime(dest);
+  document.getElementById('destModalEnd').value     = ov.endTime   != null ? ov.endTime   : getEndTime(dest);
   document.getElementById('destModalOtWd').value    = ov.ot_normal  != null ? ov.ot_normal  : MASTER.ot_normal[dest] ?? '';
   document.getElementById('destModalOtHol').value   = ov.ot_holiday != null ? ov.ot_holiday : MASTER.ot_holiday[dest] ?? '';
   document.getElementById('destModalKm').value      = ov.km != null ? ov.km : MASTER.km_normal[dest] ?? '';
+  document.getElementById('destModalOtWdAuto').textContent = '';
+  document.getElementById('destModalOtHolAuto').textContent = '';
+  autoCalcDestModalOt();
   document.getElementById('destModal').style.display = 'flex';
 }
 
@@ -2310,13 +2329,22 @@ function saveDestModal() {
   const dest    = document.getElementById('destModalKey').value;
   const shipper = document.getElementById('destModalShipper').value;
   const start   = document.getElementById('destModalStart').value.trim();
-  const otWd    = document.getElementById('destModalOtWd').value.trim();
-  const otHol   = document.getElementById('destModalOtHol').value.trim();
+  const end     = document.getElementById('destModalEnd').value.trim();
+  let   otWd    = document.getElementById('destModalOtWd').value.trim();
+  let   otHol   = document.getElementById('destModalOtHol').value.trim();
   const km      = document.getElementById('destModalKm').value.trim();
+
+  // 出退勤時間から自動計算（手入力が空の場合）
+  const timeCalc = calcOtFromTimes(start, end);
+  if (timeCalc) {
+    if (otWd === '') otWd = String((Math.max(0, timeCalc.totalMin - WORK_BASE_MIN) / 60).toFixed(1));
+    if (otHol === '') otHol = String(timeCalc.totalH.toFixed(1));
+  }
 
   if (!state.destCustom[dest]) state.destCustom[dest] = {};
   state.destCustom[dest].shipper    = shipper;
   state.destCustom[dest].startTime  = start;
+  state.destCustom[dest].endTime    = end;
   state.destCustom[dest].ot_normal  = otWd  !== '' ? parseFloat(otWd)  : null;
   state.destCustom[dest].ot_holiday = otHol !== '' ? parseFloat(otHol) : null;
   state.destCustom[dest].km         = km    !== '' ? parseFloat(km)    : null;
@@ -2325,6 +2353,40 @@ function saveDestModal() {
   closeDestModal();
   renderManageTab();
   toast(`「${dest}」を更新しました`);
+}
+
+// モーダル: 出退勤時間変更時の自動計算
+function autoCalcDestModalOt() {
+  const start = document.getElementById('destModalStart').value.trim();
+  const end   = document.getElementById('destModalEnd').value.trim();
+  const res   = calcOtFromTimes(start, end);
+  const wdAuto  = document.getElementById('destModalOtWdAuto');
+  const holAuto = document.getElementById('destModalOtHolAuto');
+  if (res) {
+    const otWd  = Math.max(0, res.totalMin - WORK_BASE_MIN) / 60;
+    const otHol = res.totalH;
+    wdAuto.textContent  = `(自動: ${otWd.toFixed(1)}h)`;
+    holAuto.textContent = `(自動: ${otHol.toFixed(1)}h)`;
+  } else {
+    wdAuto.textContent  = '';
+    holAuto.textContent = '';
+  }
+}
+document.getElementById('destModalStart').addEventListener('input', autoCalcDestModalOt);
+document.getElementById('destModalEnd').addEventListener('input', autoCalcDestModalOt);
+
+// カスタム配送先: インライン退勤時間更新 + 残業自動再計算
+function updateCustomDestEndTime(name, value) {
+  const c = state.customDests.find(c => c.name === name);
+  if (!c) return;
+  c.endTime = value;
+  const res = calcOtFromTimes(c.startTime, value);
+  if (res) {
+    c.ot_normal  = parseFloat((Math.max(0, res.totalMin - WORK_BASE_MIN) / 60).toFixed(1));
+    c.ot_holiday = parseFloat(res.totalH.toFixed(1));
+  }
+  saveState();
+  renderManageTab();
 }
 
 function clearDestCustom(dest) {
