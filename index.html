@@ -571,8 +571,12 @@ function checkApproval(){
       </div>
       <div>
         <label id="summaryPeriodLabel">月を選択</label>
-        <input type="month" id="summaryMonth">
-        <select id="summaryYear" style="display:none"></select>
+        <div style="display:flex;align-items:center;gap:4px">
+          <button class="btn btn-gray btn-sm" id="summaryPrev" style="padding:6px 10px;font-size:16px;line-height:1">◀</button>
+          <input type="month" id="summaryMonth" style="flex:1">
+          <select id="summaryYear" style="display:none;flex:1"></select>
+          <button class="btn btn-gray btn-sm" id="summaryNext" style="padding:6px 10px;font-size:16px;line-height:1">▶</button>
+        </div>
       </div>
     </div>
   </div>
@@ -601,7 +605,7 @@ function checkApproval(){
 
   <!-- 偏り可視化 -->
   <div class="card" id="fairnessCard" style="display:none">
-    <div class="card-title">距離平均（総走行距離÷69）</div>
+    <div class="card-title">距離平均（総走行距離÷<span id="fairnessDivisor"></span>）</div>
     <div id="fairnessAvgDisplay" style="text-align:center;padding:12px 0 8px"></div>
     <div id="fairnessChart"></div>
   </div>
@@ -1027,6 +1031,19 @@ function loadState() {
     if (dd)  state.driverDetails = JSON.parse(dd);
     if (dc)  state.destCustom    = JSON.parse(dc);
     if (adj) state.adjustments   = JSON.parse(adj);
+    // 重複ドライバーのクリーンアップ
+    const drvSeen = new Set();
+    const drvCleaned = [];
+    state.drivers.forEach(d => {
+      if (!drvSeen.has(d)) {
+        drvSeen.add(d);
+        drvCleaned.push(d);
+      }
+    });
+    if (drvCleaned.length !== state.drivers.length) {
+      console.warn('loadState: 重複ドライバー削除 ' + (state.drivers.length - drvCleaned.length) + '件');
+      state.drivers = drvCleaned;
+    }
     // 重複エントリのクリーンアップ
     const seen = new Set();
     const cleaned = [];
@@ -1040,6 +1057,19 @@ function loadState() {
     if (cleaned.length !== state.entries.length) {
       console.warn('loadState: 重複エントリ削除 ' + (state.entries.length - cleaned.length) + '件');
       state.entries = cleaned;
+    }
+    // 重複カスタム配送先のクリーンアップ
+    const cdSeen = new Set();
+    const cdCleaned = [];
+    state.customDests.forEach(c => {
+      if (!cdSeen.has(c.name)) {
+        cdSeen.add(c.name);
+        cdCleaned.push(c);
+      }
+    });
+    if (cdCleaned.length !== state.customDests.length) {
+      console.warn('loadState: 重複カスタム配送先削除 ' + (state.customDests.length - cdCleaned.length) + '件');
+      state.customDests = cdCleaned;
     }
     console.log('loadState: ドライバー数=' + state.drivers.length + ', エントリ数=' + state.entries.length);
   } catch(ex) { console.warn('loadState error', ex); }
@@ -1568,9 +1598,10 @@ function renderFairnessChart(rows, avgKm) {
   card.style.display = '';
 
   // 距離平均値を大きく表示
+  document.getElementById('fairnessDivisor').textContent = TOTAL_DRIVERS;
   document.getElementById('fairnessAvgDisplay').innerHTML =
     `<div style="font-size:2.2rem;font-weight:800;color:var(--gold);letter-spacing:.02em">${Math.round(avgKm).toLocaleString()} km</div>
-     <div style="font-size:.85rem;color:var(--muted);margin-top:2px">1人あたり平均走行距離（全${TOTAL_DRIVERS}人）</div>`;
+     <div style="font-size:.85rem;color:var(--muted);margin-top:2px">1人あたり平均走行距離（÷${TOTAL_DRIVERS}人）</div>`;
 
   const maxDev = Math.max(...rows.map(r => Math.abs(r.km - avgKm)), 1);
 
@@ -1659,6 +1690,40 @@ function renderYearlyTable(entries) {
 
 document.getElementById('refreshSummaryBtn').addEventListener('click', updateSummary);
 document.getElementById('summaryMonth').addEventListener('input', updateSummary);
+
+// 月/年ナビゲーション
+document.getElementById('summaryPrev').addEventListener('click', () => {
+  const mode = document.getElementById('summaryViewMode').value;
+  if (mode === 'year') {
+    const sel = document.getElementById('summaryYear');
+    const idx = sel.selectedIndex;
+    if (idx < sel.options.length - 1) { sel.selectedIndex = idx + 1; updateSummary(); }
+  } else {
+    const inp = document.getElementById('summaryMonth');
+    const cur = inp.value;
+    if (!cur) return;
+    const [y, m] = cur.split('-').map(Number);
+    const d = new Date(y, m - 2, 1);
+    inp.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    updateSummary();
+  }
+});
+document.getElementById('summaryNext').addEventListener('click', () => {
+  const mode = document.getElementById('summaryViewMode').value;
+  if (mode === 'year') {
+    const sel = document.getElementById('summaryYear');
+    const idx = sel.selectedIndex;
+    if (idx > 0) { sel.selectedIndex = idx - 1; updateSummary(); }
+  } else {
+    const inp = document.getElementById('summaryMonth');
+    const cur = inp.value;
+    if (!cur) return;
+    const [y, m] = cur.split('-').map(Number);
+    const d = new Date(y, m, 1);
+    inp.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    updateSummary();
+  }
+});
 
 // ================================================================
 // エクスポート共通: 集計データ生成
