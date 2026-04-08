@@ -487,7 +487,12 @@ function checkApproval(){
       </div>
       <div>
         <label>日付</label>
-        <input type="date" id="dateInput">
+        <div style="display:flex;align-items:center;gap:4px">
+          <button class="btn btn-gray btn-sm" id="datePrev" style="padding:6px 10px;font-size:16px;line-height:1">◀</button>
+          <input type="date" id="dateInput" style="flex:1">
+          <button class="btn btn-gray btn-sm" id="dateNext" style="padding:6px 10px;font-size:16px;line-height:1">▶</button>
+          <button class="btn btn-gray btn-sm" id="dateToday" style="padding:6px 8px;font-size:11px;line-height:1">今日</button>
+        </div>
       </div>
     </div>
     <div>
@@ -1022,6 +1027,20 @@ function loadState() {
     if (dd)  state.driverDetails = JSON.parse(dd);
     if (dc)  state.destCustom    = JSON.parse(dc);
     if (adj) state.adjustments   = JSON.parse(adj);
+    // 重複エントリのクリーンアップ
+    const seen = new Set();
+    const cleaned = [];
+    state.entries.forEach(e => {
+      const key = `${e.driver}|${e.date}|${e.dayType}|${e.dest}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        cleaned.push(e);
+      }
+    });
+    if (cleaned.length !== state.entries.length) {
+      console.warn('loadState: 重複エントリ削除 ' + (state.entries.length - cleaned.length) + '件');
+      state.entries = cleaned;
+    }
     console.log('loadState: ドライバー数=' + state.drivers.length + ', エントリ数=' + state.entries.length);
   } catch(ex) { console.warn('loadState error', ex); }
 }
@@ -1112,11 +1131,45 @@ document.getElementById('driverSelect').addEventListener('change', () => {
   updateResult();
 });
 
-document.getElementById('dateInput').addEventListener('change', () => {
-  state.currentDate = document.getElementById('dateInput').value;
+function setDate(dateStr) {
+  state.currentDate = dateStr;
+  document.getElementById('dateInput').value = dateStr;
+  // 日曜自動判定
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime()) && d.getDay() === 0) {
+    setDayType('sunday');
+  }
   renderDestList();
   loadAdjustForCurrent();
   updateResult();
+}
+
+document.getElementById('dateInput').addEventListener('change', () => {
+  setDate(document.getElementById('dateInput').value);
+});
+
+document.getElementById('datePrev').addEventListener('click', () => {
+  const cur = document.getElementById('dateInput').value;
+  if (!cur) return;
+  const d = new Date(cur);
+  d.setDate(d.getDate() - 1);
+  setDate(d.toISOString().slice(0, 10));
+});
+
+document.getElementById('dateNext').addEventListener('click', () => {
+  const cur = document.getElementById('dateInput').value;
+  if (!cur) return;
+  const d = new Date(cur);
+  d.setDate(d.getDate() + 1);
+  setDate(d.toISOString().slice(0, 10));
+});
+
+document.getElementById('dateToday').addEventListener('click', () => {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2,'0');
+  const d = String(today.getDate()).padStart(2,'0');
+  setDate(`${y}-${m}-${d}`);
 });
 
 document.getElementById('btnWeekday').addEventListener('click', () => setDayType('weekday'));
@@ -1215,10 +1268,14 @@ function renderDestList() {
 }
 
 function getCount(dest) {
+  const drv = state.currentDriver;
+  const dt  = state.currentDate;
+  const dty = state.currentDayType;
+  if (!drv || !dt) return 0;
   const e = state.entries.find(e =>
-    e.driver  === state.currentDriver &&
-    e.date    === state.currentDate   &&
-    e.dayType === state.currentDayType &&
+    e.driver  === drv &&
+    e.date    === dt  &&
+    e.dayType === dty &&
     e.dest    === dest
   );
   return e ? e.count : 0;
@@ -1228,20 +1285,23 @@ function changeCount(dest, delta) {
   if (!state.currentDriver) { toast('ドライバーを選択してください', 'err'); return; }
   if (!state.currentDate)   { toast('日付を入力してください', 'err'); return; }
 
+  const drv = state.currentDriver;
+  const dt  = state.currentDate;
+  const dty = state.currentDayType;
+
   const old = getCount(dest);
   const next = Math.max(0, old + delta);
 
+  // 既存エントリを確実に除去（重複防止）
   state.entries = state.entries.filter(e =>
-    !(e.driver === state.currentDriver && e.date === state.currentDate &&
-      e.dayType === state.currentDayType && e.dest === dest)
+    !(e.driver === drv && e.date === dt && e.dayType === dty && e.dest === dest)
   );
 
   if (next > 0) {
     const km  = getKm(dest) * next;
-    const ot  = getOtRate(dest, state.currentDayType) * next;
+    const ot  = getOtRate(dest, dty) * next;
     state.entries.push({
-      driver: state.currentDriver, date: state.currentDate,
-      dayType: state.currentDayType, dest, count: next, km, ot
+      driver: drv, date: dt, dayType: dty, dest, count: next, km, ot
     });
   }
 
