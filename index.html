@@ -759,7 +759,8 @@ function checkApproval(){
   <div class="card">
     <div class="card-title">💾 データ管理</div>
     <div class="warn-box">⚠️ 月次締め後はPDF/Excelエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
-    <button class="btn btn-danger" id="clearAllBtn">🗑️ 全データ削除</button>
+    <button class="btn btn-danger" id="clearAllBtn">🗑️ 入力データを削除</button>
+    <div style="font-size:10px;color:var(--text-muted);margin-top:6px">※ シフト入力データと調整値のみ削除されます。名簿・配送先・APIキーは保持されます。</div>
   </div>
 </div>
 
@@ -2577,11 +2578,18 @@ function removeDriver(name) {
 }
 
 document.getElementById('clearAllBtn').addEventListener('click', () => {
-  if (!confirm('⚠️ 全ての入力データを削除しますか？\nこの操作は元に戻せません。')) return;
+  const cnt = state.entries.length;
+  const adjCnt = Object.keys(state.adjustments).length;
+  if (cnt === 0 && adjCnt === 0) { toast('削除するデータがありません', 'err'); return; }
+  if (!confirm(`⚠️ 入力データ（${cnt}件）と調整値（${adjCnt}件）を削除しますか？\n\n名簿・配送先・APIキーは保持されます。`)) return;
+  if (!confirm('本当に削除してよろしいですか？\nこの操作は元に戻せません。')) return;
   state.entries = [];
+  state.adjustments = {};
   saveState();
+  renderDestList();
+  loadAdjustForCurrent();
   updateResult();
-  toast('全データを削除しました');
+  toast('入力データと調整値を削除しました');
 });
 
 // ================================================================
