@@ -605,8 +605,14 @@ function checkApproval(){
 <div class="tab-panel" id="tab-manage">
   <div class="card">
     <div class="card-title">👥 ドライバー名簿（最大80名）</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--text-muted)">現在: <span id="driverCount">0</span>名</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:11px;color:var(--text-muted)">現在: <span id="driverCount">0</span>名</div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label for="totalDriversSel" style="font-size:11px;color:var(--gold);font-weight:600">平均算出人数</label>
+          <select id="totalDriversSel" class="inp" style="width:70px;padding:4px 6px;font-size:13px;font-weight:700;text-align:center"></select>
+        </div>
+      </div>
       <button class="btn btn-primary btn-sm" id="addDriverBtn">＋ 追加</button>
     </div>
     <div id="driverChips" class="driver-chips" style="display:none"></div>
@@ -757,7 +763,7 @@ function checkApproval(){
 // 定数
 // ================================================================
 const RATE_PER_KM = 8.67;
-const TOTAL_DRIVERS = 69; // 全稼働ドライバー数（平均計算用）
+let TOTAL_DRIVERS = 69; // 全稼働ドライバー数（平均計算用・プルダウンで変更可能）
 
 // ================================================================
 // マスターデータ（実際のExcelデータに置き換えてください）
@@ -1341,10 +1347,10 @@ function updateSummary() {
       <div class="stat-lbl">総走行距離 km</div></div>
     <div class="stat-card"><div class="stat-icon">⏱️</div>
       <div class="stat-val">${avgOtWd.toFixed(1)} h</div>
-      <div class="stat-lbl">平日平均残業 (÷69)</div></div>
+      <div class="stat-lbl">平日平均残業 (÷${TOTAL_DRIVERS})</div></div>
     <div class="stat-card"><div class="stat-icon">🗓️</div>
       <div class="stat-val">${avgOtHolAll.toFixed(1)} h</div>
-      <div class="stat-lbl">日祝平均残業 (÷69)</div></div>
+      <div class="stat-lbl">日祝平均残業 (÷${TOTAL_DRIVERS})</div></div>
     <div class="stat-card"><div class="stat-icon">⏱️</div>
       <div class="stat-val">${totOt.toFixed(1)}</div>
       <div class="stat-lbl">総残業時間 h</div></div>`;
@@ -1402,7 +1408,7 @@ function renderFairnessChart(rows, avgKm) {
   // 距離平均値を大きく表示
   document.getElementById('fairnessAvgDisplay').innerHTML =
     `<div style="font-size:2.2rem;font-weight:800;color:var(--gold);letter-spacing:.02em">${Math.round(avgKm).toLocaleString()} km</div>
-     <div style="font-size:.85rem;color:var(--muted);margin-top:2px">1人あたり平均走行距離（全69人）</div>`;
+     <div style="font-size:.85rem;color:var(--muted);margin-top:2px">1人あたり平均走行距離（全${TOTAL_DRIVERS}人）</div>`;
 
   const maxDev = Math.max(...rows.map(r => Math.abs(r.km - avgKm)), 1);
 
@@ -2169,9 +2175,29 @@ function updateAdjustInfo() {
 document.getElementById('adjustTime').addEventListener('change', saveAdjust);
 document.getElementById('adjustKm').addEventListener('change', saveAdjust);
 
+function initTotalDriversSelect() {
+  const sel = document.getElementById('totalDriversSel');
+  for (let i = 1; i <= 80; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i + '人';
+    sel.appendChild(opt);
+  }
+  // localStorageから復元
+  const saved = localStorage.getItem('sc_totalDrivers');
+  if (saved) { TOTAL_DRIVERS = parseInt(saved, 10); }
+  sel.value = TOTAL_DRIVERS;
+  sel.addEventListener('change', () => {
+    TOTAL_DRIVERS = parseInt(sel.value, 10);
+    localStorage.setItem('sc_totalDrivers', TOTAL_DRIVERS);
+    updateSummary();
+  });
+}
+
 function init() {
   loadState();
   loadApiKey();
+  initTotalDriversSelect();
   initAdjustSelects();
 
   const today = new Date();
