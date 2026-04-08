@@ -663,16 +663,20 @@ function checkApproval(){
           <input type="text" id="newDestStart" placeholder="例: 05:30" maxlength="5">
         </div>
         <div>
+          <label>退勤時間 (HH:MM)</label>
+          <input type="text" id="newDestEnd" placeholder="例: 17:00" maxlength="5">
+        </div>
+        <div>
           <label>平日 km</label>
           <input type="text" id="newDestKm" placeholder="例: 120" inputmode="decimal">
         </div>
         <div>
-          <label>平日 残業h</label>
-          <input type="text" id="newDestOtWd" placeholder="例: 1.5" inputmode="decimal">
+          <label>平日 残業h <span id="newDestOtWdAuto" style="font-size:10px;color:var(--gold)"></span></label>
+          <input type="text" id="newDestOtWd" placeholder="自動計算" inputmode="decimal">
         </div>
         <div>
-          <label>日祝 残業h</label>
-          <input type="text" id="newDestOtHol" placeholder="例: 4.0" inputmode="decimal">
+          <label>日祝 残業h <span id="newDestOtHolAuto" style="font-size:10px;color:var(--gold)"></span></label>
+          <input type="text" id="newDestOtHol" placeholder="自動計算" inputmode="decimal">
         </div>
         <div style="display:flex;align-items:flex-end">
           <button class="btn btn-primary" style="width:100%" id="addDestBtn">＋ 配送先を追加</button>
@@ -1941,27 +1945,80 @@ document.getElementById('newDestName').addEventListener('keydown', e => {
   if (e.key === 'Enter') addCustomDest();
 });
 
+// 出勤・退勤時間から残業を自動計算
+const WORK_BASE_MIN = 8 * 60 + 35; // 実働7h35m + 休憩1h = 8h35m
+function calcOtFromTimes(startStr, endStr) {
+  const sm = parseTimeToMin(startStr);
+  const em = parseTimeToMin(endStr);
+  if (sm === null || em === null) return null;
+  let total = em - sm;
+  if (total <= 0) total += 24 * 60; // 日跨ぎ
+  return { totalMin: total, totalH: total / 60 };
+}
+function parseTimeToMin(s) {
+  if (!s) return null;
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+function autoCalcNewDestOt() {
+  const start = document.getElementById('newDestStart').value.trim();
+  const end   = document.getElementById('newDestEnd').value.trim();
+  const res   = calcOtFromTimes(start, end);
+  const wdAuto  = document.getElementById('newDestOtWdAuto');
+  const holAuto = document.getElementById('newDestOtHolAuto');
+  if (res) {
+    const otWd = Math.max(0, res.totalMin - WORK_BASE_MIN) / 60;
+    const otHol = res.totalH; // 日祝は全日残業
+    wdAuto.textContent  = `(自動: ${otWd.toFixed(1)}h)`;
+    holAuto.textContent = `(自動: ${otHol.toFixed(1)}h)`;
+    // 残業フィールドが空なら自動入力
+    const wdEl  = document.getElementById('newDestOtWd');
+    const holEl = document.getElementById('newDestOtHol');
+    if (!wdEl.value)  wdEl.value  = otWd.toFixed(1);
+    if (!holEl.value) holEl.value = otHol.toFixed(1);
+  } else {
+    wdAuto.textContent  = '';
+    holAuto.textContent = '';
+  }
+}
+document.getElementById('newDestStart').addEventListener('input', autoCalcNewDestOt);
+document.getElementById('newDestEnd').addEventListener('input', autoCalcNewDestOt);
+
 function addCustomDest() {
   const name    = document.getElementById('newDestName').value.trim();
   const shipper = document.getElementById('newDestShipper').value;
   const start   = document.getElementById('newDestStart').value.trim();
+  const end     = document.getElementById('newDestEnd').value.trim();
   const km      = parseFloat(document.getElementById('newDestKm').value) || 0;
-  const otWd    = parseFloat(document.getElementById('newDestOtWd').value) || 0;
-  const otHol   = parseFloat(document.getElementById('newDestOtHol').value) || 0;
+  let   otWd    = parseFloat(document.getElementById('newDestOtWd').value);
+  let   otHol   = parseFloat(document.getElementById('newDestOtHol').value);
+
+  // 出退勤時間から自動計算（手入力が無い場合）
+  const timeCalc = calcOtFromTimes(start, end);
+  if (timeCalc) {
+    if (isNaN(otWd))  otWd  = Math.max(0, timeCalc.totalMin - WORK_BASE_MIN) / 60;
+    if (isNaN(otHol)) otHol = timeCalc.totalH;
+  }
+  otWd  = otWd  || 0;
+  otHol = otHol || 0;
 
   if (!name) { toast('配送先名を入力してください', 'err'); return; }
   if (getAllDests().includes(name)) { toast('同じ名前の配送先が既に存在します', 'err'); return; }
   if (km <= 0) { toast('km は 0 より大きい値を入力してください', 'err'); return; }
 
-  state.customDests.push({ name, shipper, startTime: start, km, ot_normal: otWd, ot_holiday: otHol });
+  state.customDests.push({ name, shipper, startTime: start, endTime: end, km, ot_normal: otWd, ot_holiday: otHol });
   saveState();
 
   document.getElementById('newDestName').value    = '';
   document.getElementById('newDestShipper').value = 'TG';
   document.getElementById('newDestStart').value   = '';
+  document.getElementById('newDestEnd').value     = '';
   document.getElementById('newDestKm').value      = '';
   document.getElementById('newDestOtWd').value    = '';
   document.getElementById('newDestOtHol').value   = '';
+  document.getElementById('newDestOtWdAuto').textContent  = '';
+  document.getElementById('newDestOtHolAuto').textContent = '';
 
   renderManageTab();
   toast(`「${name}」を追加しました`);
