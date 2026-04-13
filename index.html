@@ -2629,10 +2629,56 @@ document.getElementById('clearAllBtn').addEventListener('click', () => {
   toast('入力データと調整値を削除しました');
 });
 
+// ================================================================
+// AES-GCM 暗号化/復号（APIキー保護用）
+// ================================================================
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+async function encryptText(plaintext, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const enc  = new TextEncoder().encode(plaintext);
+  const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc);
+  // salt(16) + iv(12) + ciphertext → base64
+  const buf = new Uint8Array(salt.length + iv.length + ct.byteLength);
+  buf.set(salt, 0);
+  buf.set(iv, salt.length);
+  buf.set(new Uint8Array(ct), salt.length + iv.length);
+  return btoa(String.fromCharCode(...buf));
+}
+async function decryptText(b64, password) {
+  const buf  = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const salt = buf.slice(0, 16);
+  const iv   = buf.slice(16, 28);
+  const ct   = buf.slice(28);
+  const key  = await deriveKey(password, salt);
+  const dec  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(dec);
+}
+
 // データエクスポート
-document.getElementById('dataExportBtn').addEventListener('click', () => {
+document.getElementById('dataExportBtn').addEventListener('click', async () => {
+  const apikey = localStorage.getItem('sc_apikey') || '';
+  let encApiKey = '';
+  let syncPw = '';
+  if (apikey) {
+    syncPw = prompt('APIキーを暗号化するパスワードを設定してください\n（インポート時に同じパスワードが必要です）');
+    if (syncPw === null) return; // キャンセル
+    if (!syncPw) { toast('パスワードが空のためAPIキーは除外されます', 'err'); }
+    else {
+      try { encApiKey = await encryptText(apikey, syncPw); }
+      catch(e) { toast('暗号化に失敗しました', 'err'); return; }
+    }
+  }
   const data = {
-    _version: 1,
+    _version: 2,
     _exported: new Date().toISOString(),
     entries: state.entries,
     drivers: state.drivers,
@@ -2640,19 +2686,20 @@ document.getElementById('dataExportBtn').addEventListener('click', () => {
     customDests: state.customDests,
     destCustom: state.destCustom,
     adjustments: state.adjustments,
-    totalDrivers: TOTAL_DRIVERS
+    totalDrivers: TOTAL_DRIVERS,
+    encApiKey: encApiKey || undefined
   };
   const json = JSON.stringify(data);
   const area = document.getElementById('dataSyncArea');
   area.value = json;
   area.select();
   area.setSelectionRange(0, json.length);
-  try { navigator.clipboard.writeText(json); } catch(e) {}
-  toast(`エクスポート完了（${state.entries.length}件） — クリップボードにコピーしました`);
+  try { await navigator.clipboard.writeText(json); } catch(e) {}
+  toast(`エクスポート完了（${state.entries.length}件）${encApiKey ? ' — APIキー暗号化済' : ''}`);
 });
 
 // データインポート
-document.getElementById('dataImportBtn').addEventListener('click', () => {
+document.getElementById('dataImportBtn').addEventListener('click', async () => {
   const raw = document.getElementById('dataSyncArea').value.trim();
   if (!raw) { toast('データを貼り付けてください', 'err'); return; }
   let data;
@@ -2662,13 +2709,31 @@ document.getElementById('dataImportBtn').addEventListener('click', () => {
   if (!data.entries || !data.drivers) {
     toast('データ形式が正しくありません', 'err'); return;
   }
+
+  const hasEncKey = !!data.encApiKey;
   const msg = `以下のデータをインポートしますか？\n\n` +
     `ドライバー: ${data.drivers.length}名\n` +
     `入力データ: ${data.entries.length}件\n` +
     `カスタム配送先: ${(data.customDests||[]).length}件\n` +
-    `調整値: ${Object.keys(data.adjustments||{}).length}件\n\n` +
+    `調整値: ${Object.keys(data.adjustments||{}).length}件\n` +
+    `APIキー: ${hasEncKey ? '暗号化済み（パスワード入力が必要）' : 'なし'}\n\n` +
     `※ 現在のデータは上書きされます`;
   if (!confirm(msg)) return;
+
+  // 暗号化APIキーの復号
+  if (hasEncKey) {
+    const pw = prompt('APIキーのパスワードを入力してください');
+    if (pw) {
+      try {
+        const decrypted = await decryptText(data.encApiKey, pw);
+        localStorage.setItem('sc_apikey', decrypted);
+        document.getElementById('apiKeyInput').value = decrypted;
+        toast('APIキーを復号しました');
+      } catch(e) {
+        toast('パスワードが違います。APIキーはインポートされません', 'err');
+      }
+    }
+  }
 
   state.entries       = data.entries || [];
   state.drivers       = data.drivers || [...MASTER.drivers];
