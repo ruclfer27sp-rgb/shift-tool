@@ -2007,9 +2007,29 @@ document.getElementById('exportXlsxBtn').addEventListener('click', () => {
 // ================================================================
 document.getElementById('apiKeyInput').addEventListener('input', saveApiKey);
 
-document.getElementById('toggleKeyBtn').addEventListener('click', () => {
+document.getElementById('toggleKeyBtn').addEventListener('click', async () => {
   const inp = document.getElementById('apiKeyInput');
-  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (inp.type === 'text') {
+    // 非表示に戻す（パスワード不要）
+    inp.type = 'password';
+    document.getElementById('toggleKeyBtn').textContent = '👁️';
+    return;
+  }
+  // 表示する場合はパスワード認証
+  const pw = prompt('APIキーを表示するにはパスワードを入力してください');
+  if (!pw) return;
+  const hash = await sha256(pw);
+  if (hash !== PW_HASH) {
+    toast('パスワードが正しくありません');
+    return;
+  }
+  inp.type = 'text';
+  document.getElementById('toggleKeyBtn').textContent = '🔒';
+  // 30秒後に自動で非表示に戻す
+  setTimeout(() => {
+    inp.type = 'password';
+    document.getElementById('toggleKeyBtn').textContent = '👁️';
+  }, 30000);
 });
 
 document.getElementById('dropZone').addEventListener('dragover', e => {
