@@ -1047,6 +1047,11 @@ function saveState() {
     localStorage.setItem('sc_driverDetails', JSON.stringify(state.driverDetails));
     localStorage.setItem('sc_destCustom',    JSON.stringify(state.destCustom));
     localStorage.setItem('sc_adjustments',   JSON.stringify(state.adjustments));
+    // APIキーも一緒に保存（入力欄に値があれば）
+    const apiEl = document.getElementById('apiKeyInput');
+    if (apiEl && apiEl.value) {
+      localStorage.setItem('sc_apikey', apiEl.value);
+    }
     // 保存検証
     const verify = localStorage.getItem('sc_drivers');
     if (!verify) console.error('saveState: 保存検証失敗 - localStorageに書き込めません');
@@ -1121,7 +1126,13 @@ document.addEventListener('visibilitychange', function() {
 function saveApiKey() {
   try {
     const key = document.getElementById('apiKeyInput').value;
-    localStorage.setItem('sc_apikey', key);
+    // 空値では既存キーを消さない（ユーザーが意図的に消した場合のみクリア）
+    if (key || !localStorage.getItem('sc_apikey')) {
+      localStorage.setItem('sc_apikey', key);
+    } else if (key === '' && document.activeElement === document.getElementById('apiKeyInput')) {
+      // ユーザーがフォーカスして明示的に消した場合のみクリア
+      localStorage.setItem('sc_apikey', '');
+    }
     // 即時検証
     if (key && localStorage.getItem('sc_apikey') !== key) {
       alert('APIキーの保存に失敗しました');
