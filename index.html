@@ -420,7 +420,18 @@ body{padding-bottom:env(safe-area-inset-bottom,0px)}
 })();
 </script>
 <script>
-var APPROVAL_CODE = '248163';
+// SHA-256ハッシュ（パスワード・承認コードはソース上に平文で残さない）
+var PW_HASH = '289815c3463c9cb9dafe6ee92ce5f23cfaf77b930430c5d4d8dfb51bd1ea2cd5';
+var APPROVAL_HASH = '39526a57abb7758dfe1ab6ceb468f1201201338ef218a04af8879e32bca63854';
+var loginAttempts = 0;
+var lockUntil = 0;
+
+async function sha256(str) {
+  var buf = new TextEncoder().encode(str);
+  var hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(function(b){return b.toString(16).padStart(2,'0')}).join('');
+}
+
 (function(){
   if(sessionStorage.getItem('sc_auth')==='ok'){
     document.getElementById('pw-overlay').style.display='none';
@@ -432,29 +443,44 @@ var APPROVAL_CODE = '248163';
     if(e.key==='Enter') checkApproval();
   });
 })();
-function checkPw(){
-  var v=document.getElementById('pw-input').value;
-  if(v==='enexshift2025'){
-    // 承認済みデバイスか確認
+
+async function checkPw(){
+  // ロック中チェック
+  if (Date.now() < lockUntil) {
+    var sec = Math.ceil((lockUntil - Date.now()) / 1000);
+    document.getElementById('pw-error').textContent = 'ロック中です。' + sec + '秒後に再試行してください';
+    return;
+  }
+  var v = document.getElementById('pw-input').value;
+  var hash = await sha256(v);
+  if(hash === PW_HASH){
+    loginAttempts = 0;
     if(localStorage.getItem('sc_approved')==='ok'){
       sessionStorage.setItem('sc_auth','ok');
       document.getElementById('pw-overlay').style.display='none';
     } else {
-      // 初回: 承認コード入力ステップへ
       document.getElementById('pw-step1').style.display='none';
       document.getElementById('pw-step2').style.display='';
       document.getElementById('pw-error').textContent='';
       document.getElementById('pw-approval').focus();
     }
   } else {
-    document.getElementById('pw-error').textContent='パスワードが違います';
+    loginAttempts++;
+    if (loginAttempts >= 5) {
+      lockUntil = Date.now() + 60000; // 1分ロック
+      document.getElementById('pw-error').textContent='5回失敗しました。1分間ロックされます';
+    } else {
+      document.getElementById('pw-error').textContent='パスワードが違います（残り' + (5 - loginAttempts) + '回）';
+    }
     document.getElementById('pw-input').value='';
     document.getElementById('pw-input').focus();
   }
 }
-function checkApproval(){
-  var code=document.getElementById('pw-approval').value.trim();
-  if(code===APPROVAL_CODE){
+
+async function checkApproval(){
+  var code = document.getElementById('pw-approval').value.trim();
+  var hash = await sha256(code);
+  if(hash === APPROVAL_HASH){
     localStorage.setItem('sc_approved','ok');
     sessionStorage.setItem('sc_auth','ok');
     document.getElementById('pw-overlay').style.display='none';
@@ -2614,8 +2640,7 @@ document.getElementById('dataExportBtn').addEventListener('click', () => {
     customDests: state.customDests,
     destCustom: state.destCustom,
     adjustments: state.adjustments,
-    totalDrivers: TOTAL_DRIVERS,
-    apikey: localStorage.getItem('sc_apikey') || ''
+    totalDrivers: TOTAL_DRIVERS
   };
   const json = JSON.stringify(data);
   const area = document.getElementById('dataSyncArea');
@@ -2655,10 +2680,6 @@ document.getElementById('dataImportBtn').addEventListener('click', () => {
     TOTAL_DRIVERS = data.totalDrivers;
     localStorage.setItem('sc_totalDrivers', TOTAL_DRIVERS);
     document.getElementById('totalDriversSel').value = TOTAL_DRIVERS;
-  }
-  if (data.apikey) {
-    localStorage.setItem('sc_apikey', data.apikey);
-    document.getElementById('apiKeyInput').value = data.apikey;
   }
   saveState();
   renderDriverSelect();
