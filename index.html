@@ -3030,6 +3030,13 @@ function checkStorage() {
     if (v !== 'ok') throw new Error('read mismatch');
     return true;
   } catch(e) {
+    const isQuota = e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014;
+    if (isQuota) {
+      // 容量超過 — 既存データは読めるのでアプリは起動させる
+      const usage = getStorageUsage();
+      alert(`⚠️ ストレージ容量が上限に達しています（${usage.totalKB}KB / 5,120KB）\n\nエントリ数: ${state.entries ? state.entries.length : '不明'}件\n\n新しいデータの保存ができません。\n「名簿」→「データ管理」でエクスポート後、\n入力データを削除して容量を確保してください。`);
+      return true; // 起動は許可
+    }
     alert('⚠️ このブラウザではデータ保存ができません。\n\nプライベート（シークレット）モードを使っている場合は通常モードで開き直してください。\n\nまた、ブラウザの設定で「Cookieとサイトデータ」が許可されているか確認してください。');
     return false;
   }
