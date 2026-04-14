@@ -805,6 +805,16 @@ async function checkApproval(){
   </div>
   <div class="card">
     <div class="card-title">💾 データ管理</div>
+    <div id="storageUsageBar" style="margin-bottom:12px;padding:10px;border-radius:10px;background:rgba(15,23,42,0.5);border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-mid);margin-bottom:6px">
+        <span>ストレージ使用量</span>
+        <span id="storageUsageText">計算中...</span>
+      </div>
+      <div style="height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden">
+        <div id="storageUsageFill" style="height:100%;border-radius:4px;transition:width 0.3s;width:0%"></div>
+      </div>
+      <div id="storageDetail" style="font-size:10px;color:var(--text-muted);margin-top:4px"></div>
+    </div>
     <div class="warn-box">⚠️ 月次締め後はPDF/Excelエクスポートを習慣化してください。ブラウザの閲覧データ削除でデータが消える場合があります。</div>
     <button class="btn btn-danger" id="clearAllBtn">🗑️ 入力データを削除</button>
     <div style="font-size:10px;color:var(--text-muted);margin-top:6px">※ シフト入力データと調整値のみ削除されます。名簿・配送先・APIキーは保持されます。</div>
@@ -1090,6 +1100,17 @@ let destFilter = '';
 // ================================================================
 // Persistence
 // ================================================================
+function getStorageUsage() {
+  let total = 0;
+  const detail = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    const size = (key.length + localStorage.getItem(key).length) * 2; // UTF-16
+    total += size;
+    if (key.startsWith('sc_')) detail[key] = (size / 1024).toFixed(1) + 'KB';
+  }
+  return { totalKB: (total / 1024).toFixed(1), detail };
+}
 function saveState() {
   try {
     localStorage.setItem('sc_entries',       JSON.stringify(state.entries));
@@ -1108,7 +1129,13 @@ function saveState() {
     if (!verify) console.error('saveState: 保存検証失敗 - localStorageに書き込めません');
   } catch(ex) {
     console.error('saveState error:', ex);
-    alert('データの保存に失敗しました。ブラウザのプライベートモードや容量制限を確認してください。');
+    const usage = getStorageUsage();
+    const isQuota = ex.name === 'QuotaExceededError' || ex.code === 22 || ex.code === 1014;
+    if (isQuota) {
+      alert(`⚠️ ストレージ容量が上限に達しました（現在 ${usage.totalKB}KB / 約5,120KB）\n\nエントリ数: ${state.entries.length}件\n\n対処法:\n・「データ管理」→「入力データを削除」で古い月のデータを整理\n・「エクスポート」でバックアップ後に削除`);
+    } else {
+      alert('データの保存に失敗しました。ブラウザのプライベートモードや容量制限を確認してください。\n\nエラー: ' + ex.message);
+    }
   }
 }
 function loadState() {
@@ -2378,7 +2405,26 @@ function doImportOCR(dest, count, driver, date, dayType, silent) {
 // ================================================================
 // Manage tab
 // ================================================================
+function updateStorageUsage() {
+  const usage = getStorageUsage();
+  const maxKB = 5120;
+  const pct = Math.min(100, (parseFloat(usage.totalKB) / maxKB) * 100);
+  const el = document.getElementById('storageUsageText');
+  if (el) el.textContent = `${usage.totalKB}KB / ${maxKB.toLocaleString()}KB（${pct.toFixed(1)}%）`;
+  const fill = document.getElementById('storageUsageFill');
+  if (fill) {
+    fill.style.width = pct + '%';
+    fill.style.background = pct > 80 ? '#fb7185' : pct > 50 ? '#f59e0b' : '#34d399';
+  }
+  const det = document.getElementById('storageDetail');
+  if (det) {
+    const entries = (usage.detail['sc_entries'] || '0KB');
+    const dests = (usage.detail['sc_destCustom'] || '0KB');
+    det.textContent = `内訳: エントリ ${entries} / 配送先設定 ${dests} / エントリ数 ${state.entries.length}件`;
+  }
+}
 function renderManageTab() {
+  updateStorageUsage();
   // Driver table
   document.getElementById('driverCount').textContent = state.drivers.length;
   const tbody = document.getElementById('driverTableBody');
