@@ -734,7 +734,7 @@ async function checkApproval(){
     <div class="table-wrap" style="margin-bottom:16px">
       <table class="tbl" id="destAllTable">
         <thead><tr>
-          <th>届先</th><th>荷主</th><th>出勤</th><th>退勤</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th></th>
+          <th>届先</th><th>荷主</th><th>出勤</th><th>退勤</th><th class="r">残業h(平日)</th><th class="r">残業h(日祝)</th><th class="r">距離(km)</th><th>出勤(S)</th><th>届先(S1)</th><th>届先(S2)</th><th>届先(S3)</th><th></th>
         </tr></thead>
         <tbody id="destAllBody"></tbody>
       </table>
@@ -776,6 +776,27 @@ async function checkApproval(){
           <label>日祝 残業h <span id="newDestOtHolAuto" style="font-size:10px;color:var(--gold)"></span></label>
           <input type="text" id="newDestOtHol" placeholder="自動計算" inputmode="decimal">
         </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin:8px 0 6px;border-top:1px solid var(--border);padding-top:8px">🔍 サーチ用（OCR照合用・任意）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label>出勤時間 サーチ用 (HH:MM)</label>
+          <input type="text" id="newDestSearchStart" placeholder="例: 06:00" maxlength="5">
+        </div>
+        <div>
+          <label>届け先 サーチ用1</label>
+          <input type="text" id="newDestSearchDest1" placeholder="別名・読みなど" maxlength="40">
+        </div>
+        <div>
+          <label>届け先 サーチ用2</label>
+          <input type="text" id="newDestSearchDest2" placeholder="別名・読みなど" maxlength="40">
+        </div>
+        <div>
+          <label>届け先 サーチ用3</label>
+          <input type="text" id="newDestSearchDest3" placeholder="別名・読みなど" maxlength="40">
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
         <div style="display:flex;align-items:flex-end">
           <button class="btn btn-primary" style="width:100%" id="addDestBtn">＋ 配送先を追加</button>
         </div>
@@ -833,9 +854,30 @@ async function checkApproval(){
       <label>残業時間・日祝 (h) <span id="destModalOtHolAuto" style="font-size:10px;color:var(--gold)"></span></label>
       <input type="text" id="destModalOtHol" inputmode="decimal" placeholder="自動計算">
     </div>
-    <div style="margin-bottom:16px">
+    <div style="margin-bottom:10px">
       <label>距離 (km)</label>
       <input type="text" id="destModalKm" inputmode="decimal" placeholder="例: 120">
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">🔍 サーチ用（OCR照合用・任意）</div>
+      <div style="margin-bottom:8px">
+        <label>出勤時間 サーチ用 (HH:MM)</label>
+        <input type="text" id="destModalSearchStart" placeholder="例: 06:00" maxlength="5">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div>
+          <label>届先(S1)</label>
+          <input type="text" id="destModalSearchDest1" placeholder="別名" maxlength="40">
+        </div>
+        <div>
+          <label>届先(S2)</label>
+          <input type="text" id="destModalSearchDest2" placeholder="別名" maxlength="40">
+        </div>
+        <div>
+          <label>届先(S3)</label>
+          <input type="text" id="destModalSearchDest3" placeholder="別名" maxlength="40">
+        </div>
+      </div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-gray" onclick="closeDestModal()">キャンセル</button>
@@ -1031,6 +1073,15 @@ function getShipper(dest) {
   const custom = state.customDests.find(c => c.name === dest);
   if (custom) return custom.shipper || 'TG';
   return 'TG';
+}
+function getSearchStart(dest) {
+  if (dest in state.destCustom) return state.destCustom[dest].searchStart || '';
+  return state.customDests.find(c => c.name === dest)?.searchStart || '';
+}
+function getSearchDest(dest, n) {
+  const key = 'searchDest' + n;
+  if (dest in state.destCustom) return state.destCustom[dest][key] || '';
+  return state.customDests.find(c => c.name === dest)?.[key] || '';
 }
 let ocrResults = [];
 let ocrConfig  = { driver: '', date: '', dayType: 'weekday' };
@@ -2376,6 +2427,18 @@ function renderManageTab() {
           <td class="r"><input type="text" value="${getKm(d)}" inputmode="decimal"
             style="width:56px;text-align:right;${inpStyle}"
             onchange="updateCustomDestField('${esc(d)}','km',parseFloat(this.value)||0)"></td>
+          <td><input type="text" value="${esc(getSearchStart(d))}" placeholder="HH:MM"
+            style="width:60px;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','searchStart',this.value)"></td>
+          <td><input type="text" value="${esc(getSearchDest(d,1))}" placeholder=""
+            style="width:70px;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','searchDest1',this.value)"></td>
+          <td><input type="text" value="${esc(getSearchDest(d,2))}" placeholder=""
+            style="width:70px;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','searchDest2',this.value)"></td>
+          <td><input type="text" value="${esc(getSearchDest(d,3))}" placeholder=""
+            style="width:70px;${inpStyle}"
+            onchange="updateCustomDestField('${esc(d)}','searchDest3',this.value)"></td>
           <td style="text-align:center">
             <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="removeCustomDest('${esc(d)}')">削除</button>
           </td>
@@ -2391,6 +2454,10 @@ function renderManageTab() {
           <td class="r" style="font-size:12px">${getOtNormal(d)} h</td>
           <td class="r" style="font-size:12px">${getOtHoliday(d)} h</td>
           <td class="r" style="font-size:12px">${getKm(d)} km</td>
+          <td style="font-size:11px;color:${getSearchStart(d)?'var(--text-bright)':'var(--text-muted)'}">${getSearchStart(d)||'─'}</td>
+          <td style="font-size:11px;color:${getSearchDest(d,1)?'var(--text-bright)':'var(--text-muted)'}">${getSearchDest(d,1)||'─'}</td>
+          <td style="font-size:11px;color:${getSearchDest(d,2)?'var(--text-bright)':'var(--text-muted)'}">${getSearchDest(d,2)||'─'}</td>
+          <td style="font-size:11px;color:${getSearchDest(d,3)?'var(--text-bright)':'var(--text-muted)'}">${getSearchDest(d,3)||'─'}</td>
           <td style="text-align:center;white-space:nowrap">
             <button class="btn btn-gray btn-sm" style="padding:3px 8px" onclick="openDestModal('${esc(d)}')">✏️</button>
             ${hasOverride ? `<button class="btn btn-danger btn-sm" style="padding:3px 8px;margin-left:2px" onclick="clearDestCustom('${esc(d)}')">↩</button>` : ''}
@@ -2467,7 +2534,12 @@ function addCustomDest() {
   if (getAllDests().includes(name)) { toast('同じ名前の配送先が既に存在します', 'err'); return; }
   if (km <= 0) { toast('km は 0 より大きい値を入力してください', 'err'); return; }
 
-  state.customDests.push({ name, shipper, startTime: start, endTime: end, km, ot_normal: otWd, ot_holiday: otHol });
+  const searchStart = document.getElementById('newDestSearchStart').value.trim();
+  const searchDest1 = document.getElementById('newDestSearchDest1').value.trim();
+  const searchDest2 = document.getElementById('newDestSearchDest2').value.trim();
+  const searchDest3 = document.getElementById('newDestSearchDest3').value.trim();
+
+  state.customDests.push({ name, shipper, startTime: start, endTime: end, km, ot_normal: otWd, ot_holiday: otHol, searchStart, searchDest1, searchDest2, searchDest3 });
   saveState();
 
   document.getElementById('newDestName').value    = '';
@@ -2479,6 +2551,10 @@ function addCustomDest() {
   document.getElementById('newDestOtHol').value   = '';
   document.getElementById('newDestOtWdAuto').textContent  = '';
   document.getElementById('newDestOtHolAuto').textContent = '';
+  document.getElementById('newDestSearchStart').value = '';
+  document.getElementById('newDestSearchDest1').value = '';
+  document.getElementById('newDestSearchDest2').value = '';
+  document.getElementById('newDestSearchDest3').value = '';
 
   renderManageTab();
   toast(`「${name}」を追加しました`);
@@ -2511,6 +2587,10 @@ function openDestModal(dest) {
   document.getElementById('destModalKm').value      = ov.km != null ? ov.km : MASTER.km_normal[dest] ?? '';
   document.getElementById('destModalOtWdAuto').textContent = '';
   document.getElementById('destModalOtHolAuto').textContent = '';
+  document.getElementById('destModalSearchStart').value = ov.searchStart || getSearchStart(dest);
+  document.getElementById('destModalSearchDest1').value = ov.searchDest1 || getSearchDest(dest, 1);
+  document.getElementById('destModalSearchDest2').value = ov.searchDest2 || getSearchDest(dest, 2);
+  document.getElementById('destModalSearchDest3').value = ov.searchDest3 || getSearchDest(dest, 3);
   autoCalcDestModalOt();
   document.getElementById('destModal').style.display = 'flex';
 }
@@ -2542,6 +2622,10 @@ function saveDestModal() {
   state.destCustom[dest].ot_normal  = otWd  !== '' ? parseFloat(otWd)  : null;
   state.destCustom[dest].ot_holiday = otHol !== '' ? parseFloat(otHol) : null;
   state.destCustom[dest].km         = km    !== '' ? parseFloat(km)    : null;
+  state.destCustom[dest].searchStart = document.getElementById('destModalSearchStart').value.trim();
+  state.destCustom[dest].searchDest1 = document.getElementById('destModalSearchDest1').value.trim();
+  state.destCustom[dest].searchDest2 = document.getElementById('destModalSearchDest2').value.trim();
+  state.destCustom[dest].searchDest3 = document.getElementById('destModalSearchDest3').value.trim();
 
   saveState();
   closeDestModal();
